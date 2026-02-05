@@ -1,4 +1,4 @@
-import { AppSidebar } from "@/components/app-sidebar"
+import { AppSidebar } from "@/components/agents/app-sidebar"
 import { SidebarInset } from "@/components/ui/sidebar"
 import { Header } from "@/components/agents/header"
 import { AIAgentsDashboard } from "@/components/ai-agents/ai-agents-dashboard"
