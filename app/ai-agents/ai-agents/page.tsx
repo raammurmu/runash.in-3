@@ -1,6 +1,6 @@
-import { AppSidebar } from "@/components/agents/app-sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset } from "@/components/ui/sidebar"
-import { Header } from "@/components/agents/header"
+import { Header } from "@/components/header"
 import { AIAgentsDashboard } from "@/components/ai-agents/ai-agents-dashboard"
 
 export const metadata = {
