@@ -1,7 +1,7 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Header } from "@/components/header"
-import { AnalyticsDashboard } from "@/components/ai-agents/analytics/analytics-dashboard"
+import { AnalyticsDashboard } from "@/components/analytics/analytics-dashboard"
 
 export default function AgentsAnalyticsPage() {
   return (
