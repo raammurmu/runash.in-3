@@ -52,7 +52,9 @@ export default function VirtualBackgrounds({
   const [aiPrompt, setAiPrompt] = useState("")
   const [aiStyle, setAiStyle] = useState("cinematic")
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
+ 
   const [internalBlurAmount, setInternalBlurAmount] = useState(blurAmount ?? 0)
+
 
   useEffect(() => {
     try {
@@ -223,6 +225,9 @@ export default function VirtualBackgrounds({
     }
   }
 
+
+ 
+ 
   const AI_STYLE_PALETTES: Record<string, [string, string, string]> = {
     cinematic: ["#f97316", "#0f172a", "#f8fafc"],
     minimal: ["#fb923c", "#fdba74", "#fff7ed"],
@@ -297,6 +302,10 @@ export default function VirtualBackgrounds({
     }
   }
 
+
+
+
+ 
   const getThumbnailSource = (url: string, id: string) => {
     const isHttpUrl = url.startsWith("http://") || url.startsWith("https://")
     const isPathUrl = url.startsWith("/") || url.startsWith("./") || url.startsWith("../") || !url.includes(":")
@@ -471,6 +480,23 @@ export default function VirtualBackgrounds({
       </Tabs>
 
       {renderBlurControls()}
+
+      <div className="space-y-2 border-t border-orange-100 pt-4 dark:border-orange-900/40">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="blur-slider">Background Blur</Label>
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => onSelectBackground(null)} disabled={!selectedBackground}>
+            <X className="mr-1 h-3 w-3" />
+            Remove
+          </Button>
+        </div>
+        <Slider id="blur-slider" value={[blurAmount]} max={20} step={1} onValueChange={handleBlurChange} disabled={!selectedBackground} />
+
+        <div className="flex justify-between text-xs text-gray-500">
+          <span>None</span>
+          <span>Max</span>
+        </div>
+      </div>
+
     </div>
   )
 }
