@@ -304,16 +304,25 @@ export function EnhancedDashboard() {
 
       // 1) fetch current user (real)
       const meRes = await fetch("/api/me")
+ 
       let resolvedUserId: string | number | undefined
+
+      let me: any | null = null
+
+
       if (meRes.ok) {
-        const me = await meRes.json()
+        me = await meRes.json()
         setUser(me)
         resolvedUserId = me?.id
       } else {
         setUser(null)
       }
 
+ 
       const userId = resolvedUserId || user?.id || undefined
+
+      const userId = me?.id || user?.id || undefined
+
 
       // 2) fetch dashboard data using real user id when available
       const headers: Record<string, string> = {}
