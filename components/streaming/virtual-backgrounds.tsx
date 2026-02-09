@@ -97,8 +97,15 @@ export default function VirtualBackgrounds({
   const [aiPrompt, setAiPrompt] = useState("")
   const [aiStyle, setAiStyle] = useState("cinematic")
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
+ 
   const [localSelectedBackground, setLocalSelectedBackground] = useState<string | null>(selectedBackground ?? null)
   const [localBlurAmount, setLocalBlurAmount] = useState(blurAmount ?? 0)
+
+ 
+  const [internalSelectedBackground, setInternalSelectedBackground] = useState<string | null>(selectedBackground ?? null)
+  const [internalBlurAmount, setInternalBlurAmount] = useState(blurAmount ?? 0)
+
+ 
 
   useEffect(() => {
     try {
@@ -119,24 +126,41 @@ export default function VirtualBackgrounds({
 
   useEffect(() => {
     if (selectedBackground !== undefined) {
+ 
       setLocalSelectedBackground(selectedBackground ?? null)
+
+      setInternalSelectedBackground(selectedBackground ?? null)
+ 
     }
   }, [selectedBackground])
 
   useEffect(() => {
     if (typeof blurAmount === "number") {
+ 
       setLocalBlurAmount(blurAmount)
+
+      setInternalBlurAmount(blurAmount)
+ 
     }
   }, [blurAmount])
 
   const isSelectedBackgroundControlled = selectedBackground !== undefined
+ 
   const currentSelectedBackground = isSelectedBackgroundControlled ? (selectedBackground ?? null) : localSelectedBackground
   const currentBlurAmount = typeof blurAmount === "number" ? blurAmount : localBlurAmount
+
+  const currentSelectedBackground = isSelectedBackgroundControlled ? (selectedBackground ?? null) : internalSelectedBackground
+  const currentBlurAmount = typeof blurAmount === "number" ? blurAmount : internalBlurAmount
+ 
   const blurSliderId = "virtual-background-blur-slider"
 
   const handleSelectionChange = (nextBackground: string | null) => {
     if (!isSelectedBackgroundControlled) {
+ 
       setLocalSelectedBackground(nextBackground)
+
+      setInternalSelectedBackground(nextBackground)
+ 
     }
 
     onSelectBackground(nextBackground)
@@ -144,10 +168,45 @@ export default function VirtualBackgrounds({
 
   const handleRemoveSelectedBackground = () => {
     handleSelectionChange(null)
+ 
     setLocalBlurAmount(0)
     onBlurBackground?.(0)
   }
 
+
+    setInternalBlurAmount(0)
+    onBlurBackground?.(0)
+  }
+
+  const renderBlurControls = () => (
+    <div className="space-y-2 border-t border-orange-100 pt-4 dark:border-orange-900/40">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Label htmlFor={blurSliderId}>Background Blur</Label>
+          <span className="text-xs text-gray-500">{currentBlurAmount}</span>
+        </div>
+        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={handleRemoveSelectedBackground} disabled={!currentSelectedBackground}>
+          <X className="mr-1 h-3 w-3" />
+          Remove
+        </Button>
+      </div>
+      <Slider
+        id={blurSliderId}
+        value={[currentBlurAmount]}
+        max={20}
+        step={1}
+        onValueChange={handleBlurChange}
+        disabled={!currentSelectedBackground}
+      />
+
+      <div className="flex justify-between text-xs text-gray-500">
+        <span>None</span>
+        <span>Max</span>
+      </div>
+    </div>
+  )
+
+ 
   const backgroundsByCategory = useMemo(() => {
     const allBackgrounds = [...BACKGROUND_CATALOG, ...customUploads].filter((item) => !removedIds[item.id])
 
@@ -195,7 +254,11 @@ export default function VirtualBackgrounds({
 
   const handleBlurChange = (value: number[]) => {
     const nextValue = value[0] ?? 0
+ 
     setLocalBlurAmount(nextValue)
+
+    setInternalBlurAmount(nextValue)
+ 
     onBlurBackground?.(nextValue)
   }
 
@@ -267,6 +330,12 @@ export default function VirtualBackgrounds({
     }
   }
 
+
+ 
+
+ 
+ 
+ 
   const AI_STYLE_PALETTES: Record<string, [string, string, string]> = {
     cinematic: ["#f97316", "#0f172a", "#f8fafc"],
     minimal: ["#fb923c", "#fdba74", "#fff7ed"],
@@ -333,7 +402,15 @@ export default function VirtualBackgrounds({
       }
 
       setActiveCategory("custom")
+ 
       handleSelectionChange(generatedAssets[0].url)
+
+ 
+      handleSelectionChange(generatedAssets[0].url)
+
+      onSelectBackground(generatedAssets[0].url)
+ 
+ 
       setAiPrompt("")
       setIsAIDialogOpen(false)
     } finally {
@@ -341,6 +418,14 @@ export default function VirtualBackgrounds({
     }
   }
 
+ 
+
+
+
+
+
+ 
+ 
   const getThumbnailSource = (url: string, id: string) => {
     const isHttpUrl = url.startsWith("http://") || url.startsWith("https://")
     const isPathUrl = url.startsWith("/") || url.startsWith("./") || url.startsWith("../") || !url.includes(":")
@@ -514,6 +599,7 @@ export default function VirtualBackgrounds({
         ))}
       </Tabs>
 
+ 
       <BlurControls
         blurSliderId={blurSliderId}
         currentBlurAmount={currentBlurAmount}
@@ -521,6 +607,27 @@ export default function VirtualBackgrounds({
         onBlurChange={handleBlurChange}
         onRemoveBackground={handleRemoveSelectedBackground}
       />
+
+ 
+      {renderBlurControls()}
+
+      <div className="space-y-2 border-t border-orange-100 pt-4 dark:border-orange-900/40">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="blur-slider">Background Blur</Label>
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => onSelectBackground(null)} disabled={!selectedBackground}>
+            <X className="mr-1 h-3 w-3" />
+            Remove
+          </Button>
+        </div>
+        <Slider id="blur-slider" value={[blurAmount]} max={20} step={1} onValueChange={handleBlurChange} disabled={!selectedBackground} />
+
+        <div className="flex justify-between text-xs text-gray-500">
+          <span>None</span>
+          <span>Max</span>
+        </div>
+      </div>
+ 
+ 
     </div>
   )
 }
