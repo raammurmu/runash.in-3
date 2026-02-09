@@ -144,7 +144,7 @@ export default function StreamChat({ isStreaming }: StreamChatProps) {
           <span className="text-sm font-medium">AI Chat Assistant</span>
         </div>
         <div className="flex items-center space-x-2">
-          <Switch id="ai-moderation" checked={aiModeration} onCheckedChange={setAiModeration} size="sm" />
+          <Switch id="ai-moderation" checked={aiModeration} onCheckedChange={setAiModeration} />
           <Label htmlFor="ai-moderation" className="text-xs">
             Moderation
           </Label>

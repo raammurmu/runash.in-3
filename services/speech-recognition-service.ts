@@ -8,14 +8,14 @@ export interface SpeechRecognitionResult {
 
 export class SpeechRecognitionService {
   private recognition: any = null
-  private isSupported = false
+  private supported = false
 
   constructor() {
     if (typeof window !== "undefined") {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
       if (SpeechRecognition) {
         this.recognition = new SpeechRecognition()
-        this.isSupported = true
+        this.supported = true
         this.setupRecognition()
       }
     }
@@ -31,7 +31,7 @@ export class SpeechRecognitionService {
   }
 
   startListening(onResult: (result: SpeechRecognitionResult) => void, onError: (error: string) => void) {
-    if (!this.isSupported) {
+    if (!this.supported) {
       onError("Speech recognition is not supported in this browser")
       return
     }
@@ -59,6 +59,6 @@ export class SpeechRecognitionService {
   }
 
   isSupported() {
-    return this.isSupported
+    return this.supported
   }
 }
