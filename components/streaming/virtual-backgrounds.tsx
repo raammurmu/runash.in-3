@@ -12,10 +12,10 @@ import { Upload, Search, Check, X, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface VirtualBackgroundsProps {
-  onSelectBackground: (background: string | null) => void
-  onBlurBackground: (amount: number) => void
-  selectedBackground: string | null
-  blurAmount: number
+  onSelectBackground?: (background: string | null) => void
+  onBlurBackground?: (amount: number) => void
+  selectedBackground?: string | null
+  blurAmount?: number
 }
 
 export default function VirtualBackgrounds({
@@ -99,11 +99,11 @@ export default function VirtualBackgrounds({
   )
 
   const handleBackgroundSelect = (url: string) => {
-    onSelectBackground(url === selectedBackground ? null : url)
+    onSelectBackground?.(url === selectedBackground ? null : url)
   }
 
   const handleBlurChange = (value: number[]) => {
-    onBlurBackground(value[0])
+    onBlurBackground?.(value[0])
   }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -205,7 +205,7 @@ export default function VirtualBackgrounds({
             variant="ghost"
             size="sm"
             className="h-8 px-2 text-xs"
-            onClick={() => onSelectBackground(null)}
+            onClick={() => onSelectBackground?.(null)}
             disabled={!selectedBackground}
           >
             <X className="h-3 w-3 mr-1" />
@@ -214,7 +214,7 @@ export default function VirtualBackgrounds({
         </div>
         <Slider
           id="blur-slider"
-          defaultValue={[blurAmount]}
+          defaultValue={[blurAmount ?? 0]}
           max={20}
           step={1}
           onValueChange={handleBlurChange}
