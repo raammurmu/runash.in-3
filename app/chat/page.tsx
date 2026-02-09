@@ -15,6 +15,7 @@ import ChatSidebar from "@/components/chat/chat-sidebar"
 import UserPreferencesDialog from "@/components/chat/user-preferences-dialog"
 import CartDrawer from "@/components/cart/cart-drawer"
 import VoiceControls from "@/components/chat/voice-controls"
+import { getRecommendedProducts, shouldRecommendProducts } from "@/lib/chat-product-recommendations"
 
 export default function RunAshChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -118,42 +119,21 @@ export default function RunAshChatPage() {
     const input = userInput.toLowerCase()
 
     // Product recommendations
-    if (input.includes("organic") || input.includes("product") || input.includes("buy")) {
+    if (shouldRecommendProducts(input)) {
+      const products = getRecommendedProducts(input, userPreferences)
+      const hasProducts = products.length > 0
+      const productText = hasProducts
+        ? `Here are ${products.length} grocery products matched to your budget and preferences:`
+        : "I couldn't find products matching all filters, but I can broaden the criteria if you'd like."
+
       return {
         id: Date.now().toString(),
-        content: "Here are some organic products I recommend based on your preferences:",
+        content: productText,
         role: "assistant",
         timestamp: new Date(),
         type: "product",
         metadata: {
-          products: [
-            {
-              id: "1",
-              name: "Organic Quinoa",
-              description: "Premium organic quinoa, rich in protein and fiber",
-              price: 12.99,
-              category: "grains-cereals",
-              isOrganic: true,
-              sustainabilityScore: 9,
-              image: "/placeholder.svg?height=200&width=200",
-              inStock: true,
-              certifications: ["USDA Organic", "Fair Trade"],
-              carbonFootprint: 2.1,
-            },
-            {
-              id: "2",
-              name: "Organic Avocados",
-              description: "Fresh organic avocados from sustainable farms",
-              price: 8.99,
-              category: "fruits-vegetables",
-              isOrganic: true,
-              sustainabilityScore: 8,
-              image: "/placeholder.svg?height=200&width=200",
-              inStock: true,
-              certifications: ["USDA Organic"],
-              carbonFootprint: 1.8,
-            },
-          ],
+          products,
         },
       }
     }
