@@ -304,18 +304,13 @@ export function EnhancedDashboard() {
         setUser(null)
       }
 
-      const userId = (await (meRes.ok ? (await meRes.json()).id : null)) || (user && user.id) || undefined
-
-      // 2) fetch dashboard data using real user id when available
-      const headers: Record<string, string> = {}
-      if (userId) headers["x-user-id"] = String(userId)
-
+      // 2) fetch dashboard data via authenticated session (cookies)
       const [statsRes, streamsRes, activityRes, achievementsRes, goalsRes] = await Promise.all([
-        fetch("/api/dashboard/stats", { headers }),
-        fetch("/api/dashboard/streams?limit=12", { headers }),
-        fetch("/api/dashboard/activity?limit=10", { headers }),
-        fetch("/api/dashboard/achievements", { headers }),
-        fetch("/api/dashboard/goals", { headers }),
+        fetch("/api/dashboard/stats"),
+        fetch("/api/dashboard/streams?limit=12"),
+        fetch("/api/dashboard/activity?limit=10"),
+        fetch("/api/dashboard/achievements"),
+        fetch("/api/dashboard/goals"),
       ])
 
       if (statsRes.ok) {
@@ -390,7 +385,7 @@ export function EnhancedDashboard() {
       const payload = { title: startTitle || "Untitled Stream", category: startCategory }
       const res = await fetch("/api/streams/start", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(user?.id ? { "x-user-id": String(user.id) } : {}) },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
       if (res.ok) {
@@ -415,7 +410,7 @@ export function EnhancedDashboard() {
       const payload = { title: scheduleTitle || "Scheduled Stream", category: scheduleCategory, when: scheduleDate }
       const res = await fetch("/api/streams/schedule", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(user?.id ? { "x-user-id": String(user.id) } : {}) },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
       if (res.ok) {
@@ -439,7 +434,7 @@ export function EnhancedDashboard() {
       const emails = inviteEmails.split(",").map((e) => e.trim()).filter(Boolean)
       const res = await fetch("/api/collaborators/invite", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(user?.id ? { "x-user-id": String(user.id) } : {}) },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emails }),
       })
       if (res.ok) {
