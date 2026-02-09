@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { readData } from "./utils"
+import { readData } from "../utils"
 import type { DashboardRecentStreamsResponse } from "@/lib/types/dashboard-streams"
 
 export async function GET(request: NextRequest) {
