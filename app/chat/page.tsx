@@ -15,6 +15,10 @@ import ChatSidebar from "@/components/chat/chat-sidebar"
 import UserPreferencesDialog from "@/components/chat/user-preferences-dialog"
 import CartDrawer from "@/components/cart/cart-drawer"
 import VoiceControls from "@/components/chat/voice-controls"
+import { getProductRecommendations } from "@/lib/product-recommendations"
+import { getRecipeSuggestions } from "@/lib/recipe-suggestions"
+import { getSustainabilityTips } from "@/lib/sustainability-tips"
+import { getAutomationSuggestions } from "@/lib/automation-suggestions"
 
 export default function RunAshChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -115,187 +119,19 @@ export default function RunAshChatPage() {
   }
 
   const generateAIResponse = (userInput: string): ChatMessage => {
-    const input = userInput.toLowerCase()
-
-    // Product recommendations
-    if (input.includes("organic") || input.includes("product") || input.includes("buy")) {
-      return {
+    return (
+      getProductRecommendations(userInput, userPreferences) ??
+      getRecipeSuggestions(userInput, userPreferences) ??
+      getSustainabilityTips(userInput, userPreferences) ??
+      getAutomationSuggestions(userInput, userPreferences) ?? {
         id: Date.now().toString(),
-        content: "Here are some organic products I recommend based on your preferences:",
+        content:
+          "I can help you with organic products, sustainable living tips, eco-friendly recipes, and retailing automation. What specific area would you like to explore?",
         role: "assistant",
         timestamp: new Date(),
-        type: "product",
-        metadata: {
-          products: [
-            {
-              id: "1",
-              name: "Organic Quinoa",
-              description: "Premium organic quinoa, rich in protein and fiber",
-              price: 12.99,
-              category: "grains-cereals",
-              isOrganic: true,
-              sustainabilityScore: 9,
-              image: "/placeholder.svg?height=200&width=200",
-              inStock: true,
-              certifications: ["USDA Organic", "Fair Trade"],
-              carbonFootprint: 2.1,
-            },
-            {
-              id: "2",
-              name: "Organic Avocados",
-              description: "Fresh organic avocados from sustainable farms",
-              price: 8.99,
-              category: "fruits-vegetables",
-              isOrganic: true,
-              sustainabilityScore: 8,
-              image: "/placeholder.svg?height=200&width=200",
-              inStock: true,
-              certifications: ["USDA Organic"],
-              carbonFootprint: 1.8,
-            },
-          ],
-        },
+        type: "text",
       }
-    }
-
-    // Recipe suggestions
-    if (input.includes("recipe") || input.includes("cook") || input.includes("meal")) {
-      return {
-        id: Date.now().toString(),
-        content: "Here are some sustainable recipes perfect for your cooking level:",
-        role: "assistant",
-        timestamp: new Date(),
-        type: "recipe",
-        metadata: {
-          recipes: [
-            {
-              id: "1",
-              name: "Organic Quinoa Buddha Bowl",
-              description:
-                "A nutritious and colorful bowl with organic quinoa, seasonal vegetables, and tahini dressing",
-              difficulty: "easy",
-              prepTime: 15,
-              cookTime: 20,
-              servings: 2,
-              ingredients: [
-                { id: "1", name: "Organic Quinoa", amount: "1", unit: "cup", isOrganic: true },
-                { id: "2", name: "Organic Kale", amount: "2", unit: "cups", isOrganic: true },
-                { id: "3", name: "Organic Chickpeas", amount: "1", unit: "can", isOrganic: true },
-              ],
-              instructions: [
-                "Rinse quinoa and cook according to package instructions",
-                "Massage kale with olive oil and lemon juice",
-                "Drain and rinse chickpeas",
-                "Arrange all ingredients in bowls and drizzle with tahini dressing",
-              ],
-              image: "/placeholder.svg?height=300&width=400",
-              tags: ["vegan", "gluten-free", "high-protein"],
-              sustainabilityScore: 9,
-              nutritionalInfo: {
-                calories: 420,
-                protein: 18,
-                carbs: 65,
-                fat: 12,
-                fiber: 12,
-                sugar: 8,
-                sodium: 380,
-              },
-            },
-          ],
-        },
-      }
-    }
-
-    // Sustainability tips
-    if (
-      input.includes("sustainable") ||
-      input.includes("eco") ||
-      input.includes("environment") ||
-      input.includes("carbon")
-    ) {
-      return {
-        id: Date.now().toString(),
-        content: "Here are some sustainability tips to help reduce your environmental impact:",
-        role: "assistant",
-        timestamp: new Date(),
-        type: "tip",
-        metadata: {
-          tips: [
-            {
-              id: "1",
-              title: "Buy Local and Seasonal",
-              description:
-                "Choose locally grown, seasonal produce to reduce transportation emissions and support local farmers.",
-              category: "food",
-              impact: "high",
-              difficulty: "easy",
-              estimatedSavings: 25,
-            },
-            {
-              id: "2",
-              title: "Reduce Food Waste",
-              description: "Plan meals, store food properly, and compost scraps to minimize waste.",
-              category: "waste",
-              impact: "high",
-              difficulty: "medium",
-              estimatedSavings: 40,
-            },
-          ],
-        },
-      }
-    }
-
-    // Automation suggestions
-    if (
-      input.includes("automat") ||
-      input.includes("business") ||
-      input.includes("retail") ||
-      input.includes("inventory")
-    ) {
-      return {
-        id: Date.now().toString(),
-        content: "Here are automation suggestions to optimize your organic retail business:",
-        role: "assistant",
-        timestamp: new Date(),
-        type: "automation",
-        metadata: {
-          automationSuggestions: [
-            {
-              id: "1",
-              title: "Smart Inventory Management",
-              description:
-                "Implement AI-powered inventory tracking to predict demand and reduce waste of perishable organic products.",
-              category: "inventory",
-              complexity: "moderate",
-              estimatedROI: 35,
-              implementationTime: "2-4 weeks",
-              tools: ["RFID tags", "Inventory software", "Demand forecasting AI"],
-            },
-            {
-              id: "2",
-              title: "Automated Customer Segmentation",
-              description:
-                "Use customer data to automatically segment buyers and send personalized organic product recommendations.",
-              category: "marketing",
-              complexity: "simple",
-              estimatedROI: 28,
-              implementationTime: "1-2 weeks",
-              tools: ["CRM software", "Email automation", "Analytics platform"],
-            },
-          ],
-        },
-      }
-    }
-
-    // Default response
-    return {
-      id: Date.now().toString(),
-      content:
-        "I can help you with organic products, sustainable living tips, eco-friendly recipes, and retailing automation. What specific area would you like to explore?",
-      role: "assistant",
-      timestamp: new Date(),
-      type: "text",
-    }
+    )
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
