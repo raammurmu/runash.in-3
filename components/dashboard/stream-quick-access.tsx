@@ -37,17 +37,36 @@ type ScheduledStream = {
   status: "scheduled" | "cancelled"
 }
 
+const STREAM_CATEGORIES = [
+  { value: "grocery", label: "Grocery" },
+  { value: "sustainable", label: "Sustainable" },
+  { value: "recipes", label: "Recipes" },
+  { value: "gaming", label: "Gaming" },
+  { value: "education", label: "Education" },
+  { value: "technology", label: "Technology" },
+  { value: "entertainment", label: "Entertainment" },
+] as const
+
+type StreamCategory = (typeof STREAM_CATEGORIES)[number]["value"]
+
+const DEFAULT_STREAM_CATEGORY: StreamCategory = STREAM_CATEGORIES[0].value
+const STREAM_CATEGORY_VALUES = new Set<StreamCategory>(STREAM_CATEGORIES.map(({ value }) => value))
+
+function isStreamCategory(value: string): value is StreamCategory {
+  return STREAM_CATEGORY_VALUES.has(value as StreamCategory)
+}
+
 export function StreamQuickAccess() {
   const router = useRouter()
   const [streamTitle, setStreamTitle] = useState("")
-  const [streamCategory, setStreamCategory] = useState("gaming")
-  const [recentStreams, setRecentStreams] = useState<RecentStream[]>([])
-  const [scheduledStreams, setScheduledStreams] = useState<ScheduledStream[]>([])
+  const [startCategory, setStartCategory] = useState<StreamCategory>(DEFAULT_STREAM_CATEGORY)
+  const [recentStreamItems, setRecentStreamItems] = useState<RecentStream[]>([])
+  const [scheduledStreamItems, setScheduledStreamItems] = useState<ScheduledStream[]>([])
   const [loading, setLoading] = useState(false)
 
   // Scheduling
   const [scheduleTitle, setScheduleTitle] = useState("")
-  const [scheduleCategory, setScheduleCategory] = useState("gaming")
+  const [scheduleCategory, setScheduleCategory] = useState<StreamCategory>(DEFAULT_STREAM_CATEGORY)
   const [scheduleDateTime, setScheduleDateTime] = useState("")
 
   // Invite
@@ -73,8 +92,8 @@ export function StreamQuickAccess() {
         const recentJson = await recentRes.json()
         const scheduledJson = await scheduledRes.json()
 
-        setRecentStreams(Array.isArray(recentJson) ? recentJson : [])
-        setScheduledStreams(Array.isArray(scheduledJson) ? scheduledJson : [])
+        setRecentStreamItems(Array.isArray(recentJson) ? recentJson : [])
+        setScheduledStreamItems(Array.isArray(scheduledJson) ? scheduledJson : [])
       } catch (err: any) {
         console.error(err)
         toast({ title: "Error", description: err?.message || "Could not load streams." })
@@ -94,10 +113,11 @@ export function StreamQuickAccess() {
 
     try {
       setLoading(true)
+      const selectedCategory = STREAM_CATEGORY_VALUES.has(startCategory) ? startCategory : DEFAULT_STREAM_CATEGORY
       const res = await fetch("/api/dashboard/streams/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: streamTitle, category: streamCategory }),
+        body: JSON.stringify({ title: streamTitle, category: selectedCategory }),
       })
 
       if (!res.ok) {
@@ -112,7 +132,7 @@ export function StreamQuickAccess() {
       })
 
       // Update recent streams locally
-      setRecentStreams((r) => [{ id: data.id, title: streamTitle, date: "Live now", viewers: 0, url: data.url }, ...r])
+      setRecentStreamItems((streams) => [{ id: data.id, title: streamTitle, date: "Live now", viewers: 0, url: data.url }, ...streams])
       setStreamTitle("")
       // Navigate to stream detail/player page (adjust route to your app)
       router.push(`/stream/${data.id}`)
@@ -132,12 +152,13 @@ export function StreamQuickAccess() {
 
     try {
       setLoading(true)
+      const selectedCategory = STREAM_CATEGORY_VALUES.has(scheduleCategory) ? scheduleCategory : DEFAULT_STREAM_CATEGORY
       const res = await fetch("/api/dashboard/streams/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: scheduleTitle,
-          category: scheduleCategory,
+          category: selectedCategory,
           dateTime: scheduleDateTime,
         }),
       })
@@ -149,7 +170,7 @@ export function StreamQuickAccess() {
 
       const newScheduled = await res.json()
       toast({ title: "Scheduled", description: `${newScheduled.title} scheduled for ${newScheduled.dateTime}` })
-      setScheduledStreams((s) => [newScheduled, ...s])
+      setScheduledStreamItems((streams) => [newScheduled, ...streams])
       setScheduleTitle("")
       setScheduleDateTime("")
     } catch (err: any) {
@@ -246,35 +267,20 @@ export function StreamQuickAccess() {
               </div>
               <div className="space-y-2">
                 <Label>Category</Label>
-                <RadioGroup value={streamCategory} onValueChange={setStreamCategory}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="gaming" id="gaming" />
-                    <Label htmlFor="gaming">Grocery</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="education" id="education" />
-                    <Label htmlFor="education">Sustainable</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="education" id="education" />
-                    <Label htmlFor="education">Recipes</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="education" id="education" />
-                    <Label htmlFor="education">Gaming</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="education" id="education" />
-                    <Label htmlFor="education">Education</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="technology" id="technology" />
-                    <Label htmlFor="technology">Technology</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="entertainment" id="entertainment" />
-                    <Label htmlFor="entertainment">Entertainment</Label>
-                  </div>
+                <RadioGroup
+                  value={startCategory}
+                  onValueChange={(value) => setStartCategory(isStreamCategory(value) ? value : DEFAULT_STREAM_CATEGORY)}
+                >
+                  {STREAM_CATEGORIES.map((category) => {
+                    const categoryId = `stream-category-${category.value}`
+
+                    return (
+                      <div key={category.value} className="flex items-center space-x-2">
+                        <RadioGroupItem value={category.value} id={categoryId} />
+                        <Label htmlFor={categoryId}>{category.label}</Label>
+                      </div>
+                    )
+                  })}
                 </RadioGroup>
               </div>
             </div>
@@ -301,14 +307,16 @@ export function StreamQuickAccess() {
             <Input placeholder="Title" value={scheduleTitle} onChange={(e) => setScheduleTitle(e.target.value)} />
             <Input type="datetime-local" value={scheduleDateTime} onChange={(e) => setScheduleDateTime(e.target.value)} />
             <div className="flex items-center space-x-2">
-              <select value={scheduleCategory} onChange={(e) => setScheduleCategory(e.target.value)} className="rounded-md border px-2 py-1">
-                <option value="gaming">Grocery</option>
-                <option value="gaming">Sustainable</option>
-                <option value="gaming">Recipes</option>
-                <option value="gaming">Gaming</option>
-                <option value="education">Education</option>
-                <option value="technology">Technology</option>
-                <option value="entertainment">Entertainment</option>
+              <select
+                value={scheduleCategory}
+                onChange={(e) => setScheduleCategory(isStreamCategory(e.target.value) ? e.target.value : DEFAULT_STREAM_CATEGORY)}
+                className="rounded-md border px-2 py-1"
+              >
+                {STREAM_CATEGORIES.map((category) => (
+                  <option key={`schedule-category-${category.value}`} value={category.value}>
+                    {category.label}
+                  </option>
+                ))}
               </select>
               <Button onClick={handleScheduleStream} disabled={loading}>
                 Schedule
@@ -330,12 +338,12 @@ export function StreamQuickAccess() {
               className="rounded-md border px-2 py-1"
             >
               <option value="">Select a stream (scheduled or recent)</option>
-              {scheduledStreams.map((s) => (
+              {scheduledStreamItems.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.title} — {new Date(s.dateTime).toLocaleString()}
                 </option>
               ))}
-              {recentStreams.map((r) => (
+              {recentStreamItems.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.title} — {r.date}
                 </option>
@@ -352,10 +360,10 @@ export function StreamQuickAccess() {
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Recent Streams</h3>
           <div className="space-y-2">
-            {recentStreams.length === 0 && !loading ? (
+            {recentStreamItems.length === 0 && !loading ? (
               <div className="text-xs text-muted-foreground">No recent streams yet.</div>
             ) : (
-              recentStreams.map((stream) => (
+              recentStreamItems.map((stream) => (
                 <div key={stream.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
                   <div className="min-w-0">
                     <h4 className="text-sm font-medium truncate">{stream.title}</h4>
@@ -393,10 +401,10 @@ export function StreamQuickAccess() {
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Upcoming Streams</h3>
           <div className="space-y-2">
-            {scheduledStreams.length === 0 && !loading ? (
+            {scheduledStreamItems.length === 0 && !loading ? (
               <div className="text-xs text-muted-foreground">No upcoming streams scheduled.</div>
             ) : (
-              scheduledStreams.map((stream) => (
+              scheduledStreamItems.map((stream) => (
                 <div key={stream.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
                   <div className="min-w-0">
                     <h4 className="text-sm font-medium truncate">{stream.title}</h4>
