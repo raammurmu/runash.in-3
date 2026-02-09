@@ -16,20 +16,66 @@ import UserPreferencesDialog from "@/components/chat/user-preferences-dialog"
 import CartDrawer from "@/components/cart/cart-drawer"
 import VoiceControls from "@/components/chat/voice-controls"
 
+const ACTIVE_SESSION_KEY = "runash.chat.activeSessionId"
+const SESSION_MESSAGES_PREFIX = "runash.chat.messages"
+const DEFAULT_ASSISTANT_MESSAGE: ChatMessage = {
+  id: "assistant:welcome",
+  content:
+    "Hello! I'm RunAshChat, your AI assistant for organic products, sustainable living, recipes, and retailing automation. How can I help you today?",
+  role: "assistant",
+  timestamp: new Date(),
+  type: "text",
+}
+
+const DEV_CHAT_FALLBACK_ENABLED = process.env.NEXT_PUBLIC_CHAT_DEV_FALLBACK === "true"
+
+interface ChatRespondPayload {
+  sessionId: string
+  requestId: string
+  message: {
+    id: string
+    content: string
+    role: "assistant"
+    timestamp: string
+    type?: ChatMessage["type"]
+    metadata?: ChatMessage["metadata"]
+  }
+}
+
+interface ChatRequestError {
+  requestId: string
+  userMessageId: string
+  content: string
+  fallbackMessageId: string
+  errorMessage: string
+}
+
+const toStorageKey = (sessionId: string) => `${SESSION_MESSAGES_PREFIX}:${sessionId}`
+
+const toMessage = (payload: ChatRespondPayload): ChatMessage => ({
+  id: payload.message.id,
+  content: payload.message.content,
+  role: "assistant",
+  timestamp: new Date(payload.message.timestamp),
+  type: payload.message.type ?? "text",
+  metadata: payload.message.metadata,
+})
+
+const toFallbackMessage = (sessionId: string, requestId: string): ChatMessage => ({
+  id: `${sessionId}:assistant:fallback:${requestId}`,
+  content: "I ran into an issue reaching the AI service. Please retry your last message.",
+  role: "assistant",
+  timestamp: new Date(),
+  type: "text",
+})
+
 export default function RunAshChatPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "1",
-      content:
-        "Hello! I'm RunAshChat, your AI assistant for organic products, sustainable living, recipes, and retailing automation. How can I help you today?",
-      role: "assistant",
-      timestamp: new Date(),
-      type: "text",
-    },
-  ])
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([DEFAULT_ASSISTANT_MESSAGE])
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null)
+  const [activeSessionId, setActiveSessionId] = useState<string>(`session:${crypto.randomUUID()}`)
+  const [chatError, setChatError] = useState<ChatRequestError | null>(null)
   const [showPreferences, setShowPreferences] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -44,7 +90,6 @@ export default function RunAshChatPage() {
   })
 
   const [voiceEnabled, setVoiceEnabled] = useState(false)
-  const [autoSpeakResponses, setAutoSpeakResponses] = useState(false)
 
   const quickActions: QuickAction[] = [
     {
@@ -79,11 +124,137 @@ export default function RunAshChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  }, [chatMessages])
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    const storedSessionId = window.localStorage.getItem(ACTIVE_SESSION_KEY)
+    if (storedSessionId) {
+      setActiveSessionId(storedSessionId)
+      return
+    }
+
+    window.localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId)
+  }, [activeSessionId])
+
+  useEffect(() => {
+    window.localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId)
+    const stored = window.localStorage.getItem(toStorageKey(activeSessionId))
+    if (!stored) {
+      setChatMessages([DEFAULT_ASSISTANT_MESSAGE])
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as Array<Omit<ChatMessage, "timestamp"> & { timestamp: string }>
+      setChatMessages(
+        parsed.map((message) => ({
+          ...message,
+          timestamp: new Date(message.timestamp),
+        })),
+      )
+    } catch {
+      setChatMessages([DEFAULT_ASSISTANT_MESSAGE])
+    }
+  }, [activeSessionId])
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      toStorageKey(activeSessionId),
+      JSON.stringify(chatMessages.map((message) => ({ ...message, timestamp: message.timestamp.toISOString() }))),
+    )
+  }, [chatMessages, activeSessionId])
+
+  const performSendMessage = async ({
+    content,
+    requestId,
+    userMessageId,
+    optimistic,
+  }: {
+    content: string
+    requestId: string
+    userMessageId: string
+    optimistic: boolean
+  }) => {
+    const userMessage: ChatMessage = {
+      id: userMessageId,
+      content,
+      role: "user",
+      timestamp: new Date(),
+      type: "text",
+    }
+
+    if (optimistic) {
+      setChatMessages((prev) => (prev.some((message) => message.id === userMessageId) ? prev : [...prev, userMessage]))
+    }
+
+    setInputValue("")
+    setIsTyping(true)
+    setChatError(null)
+
+    try {
+      const response = await fetch("/api/chat/respond", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId: activeSessionId,
+          requestId,
+          message: {
+            id: userMessageId,
+            content,
+            role: "user",
+            timestamp: userMessage.timestamp.toISOString(),
+          },
+          preferences: userPreferences,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`)
+      }
+
+      const payload = (await response.json()) as ChatRespondPayload
+      const assistantMessage = toMessage(payload)
+
+      setChatMessages((prev) => {
+        if (prev.some((message) => message.id === assistantMessage.id)) {
+          return prev
+        }
+
+        return [...prev, assistantMessage]
+      })
+    } catch (error) {
+      if (DEV_CHAT_FALLBACK_ENABLED) {
+        const fallback = generateDevFallbackResponse(content, activeSessionId, requestId)
+        setChatMessages((prev) => [...prev, fallback])
+        return
+      }
+
+      const fallbackMessage = toFallbackMessage(activeSessionId, requestId)
+      setChatMessages((prev) => {
+        if (prev.some((message) => message.id === fallbackMessage.id)) {
+          return prev
+        }
+
+        return [...prev, fallbackMessage]
+      })
+
+      setChatError({
+        requestId,
+        userMessageId,
+        content,
+        fallbackMessageId: fallbackMessage.id,
+        errorMessage: error instanceof Error ? error.message : "Unknown chat error",
+      })
+    } finally {
+      setIsTyping(false)
+    }
+  }
 
   const handleQuickAction = (message: string) => {
     setInputValue(message)
@@ -92,35 +263,39 @@ export default function RunAshChatPage() {
 
   const handleSendMessage = async (messageContent?: string) => {
     const content = messageContent || inputValue.trim()
-    if (!content) return
+    if (!content || isTyping) return
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+    const requestId = crypto.randomUUID()
+    const userMessageId = `${activeSessionId}:user:${requestId}`
+
+    await performSendMessage({
       content,
-      role: "user",
-      timestamp: new Date(),
-      type: "text",
-    }
-
-    setMessages((prev) => [...prev, userMessage])
-    setInputValue("")
-    setIsTyping(true)
-
-    // Simulate AI response
-    setTimeout(() => {
-      const response = generateAIResponse(content)
-      setMessages((prev) => [...prev, response])
-      setIsTyping(false)
-    }, 1500)
+      requestId,
+      userMessageId,
+      optimistic: true,
+    })
   }
 
-  const generateAIResponse = (userInput: string): ChatMessage => {
+  const handleRetryLastMessage = async () => {
+    if (!chatError || isTyping) return
+
+    setChatMessages((prev) => prev.filter((message) => message.id !== chatError.fallbackMessageId))
+
+    await performSendMessage({
+      content: chatError.content,
+      requestId: chatError.requestId,
+      userMessageId: chatError.userMessageId,
+      optimistic: false,
+    })
+  }
+
+  const generateDevFallbackResponse = (userInput: string, sessionId: string, requestId: string): ChatMessage => {
     const input = userInput.toLowerCase()
 
     // Product recommendations
     if (input.includes("organic") || input.includes("product") || input.includes("buy")) {
       return {
-        id: Date.now().toString(),
+        id: `${sessionId}:assistant:${requestId}`,
         content: "Here are some organic products I recommend based on your preferences:",
         role: "assistant",
         timestamp: new Date(),
@@ -161,7 +336,7 @@ export default function RunAshChatPage() {
     // Recipe suggestions
     if (input.includes("recipe") || input.includes("cook") || input.includes("meal")) {
       return {
-        id: Date.now().toString(),
+        id: `${sessionId}:assistant:${requestId}`,
         content: "Here are some sustainable recipes perfect for your cooking level:",
         role: "assistant",
         timestamp: new Date(),
@@ -214,7 +389,7 @@ export default function RunAshChatPage() {
       input.includes("carbon")
     ) {
       return {
-        id: Date.now().toString(),
+        id: `${sessionId}:assistant:${requestId}`,
         content: "Here are some sustainability tips to help reduce your environmental impact:",
         role: "assistant",
         timestamp: new Date(),
@@ -253,7 +428,7 @@ export default function RunAshChatPage() {
       input.includes("inventory")
     ) {
       return {
-        id: Date.now().toString(),
+        id: `${sessionId}:assistant:${requestId}`,
         content: "Here are automation suggestions to optimize your organic retail business:",
         role: "assistant",
         timestamp: new Date(),
@@ -289,7 +464,7 @@ export default function RunAshChatPage() {
 
     // Default response
     return {
-      id: Date.now().toString(),
+      id: `${sessionId}:assistant:${requestId}`,
       content:
         "I can help you with organic products, sustainable living tips, eco-friendly recipes, and retailing automation. What specific area would you like to explore?",
       role: "assistant",
@@ -360,7 +535,13 @@ export default function RunAshChatPage() {
         {/* Sidebar */}
         {sidebarOpen && (
           <div className="w-80">
-            <ChatSidebar onSessionSelect={(session) => setCurrentSession(session)} currentSession={currentSession} />
+            <ChatSidebar
+              onSessionSelect={(session) => {
+                setCurrentSession(session)
+                setActiveSessionId(session.id)
+              }}
+              currentSession={currentSession}
+            />
           </div>
         )}
 
@@ -375,7 +556,7 @@ export default function RunAshChatPage() {
             {/* Messages */}
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
-                {messages.map((message) => (
+                {chatMessages.map((message) => (
                   <ChatMessageComponent key={message.id} message={message} />
                 ))}
 
@@ -414,6 +595,14 @@ export default function RunAshChatPage() {
 
             {/* Input */}
             <div className="p-4 border-t">
+              {chatError && (
+                <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <p>Failed to send message: {chatError.errorMessage}</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={handleRetryLastMessage}>
+                    Retry last message
+                  </Button>
+                </div>
+              )}
               <div className="flex space-x-2">
                 <Input
                   ref={inputRef}
@@ -425,7 +614,7 @@ export default function RunAshChatPage() {
                 />
                 <Button
                   onClick={() => handleSendMessage()}
-                  disabled={!inputValue.trim()}
+                  disabled={!inputValue.trim() || isTyping}
                   className="bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-700 hover:to-yellow-600 text-white"
                 >
                   <Send className="h-4 w-4" />
@@ -440,7 +629,7 @@ export default function RunAshChatPage() {
                   </span>
                   <span className="flex items-center">
                     <Sparkles className="h-3 w-3 mr-1 text-orange-500" />
-                    RunAsh AI 
+                    RunAsh AI
                   </span>
                 </div>
               </div>
