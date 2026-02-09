@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -15,6 +16,7 @@ import ChatSidebar from "@/components/chat/chat-sidebar"
 import UserPreferencesDialog from "@/components/chat/user-preferences-dialog"
 import CartDrawer from "@/components/cart/cart-drawer"
 import VoiceControls from "@/components/chat/voice-controls"
+import { generateChatResponse } from "@/lib/chat-response-engine"
 
 const ACTIVE_SESSION_KEY = "runash.chat.activeSessionId"
 const SESSION_MESSAGES_PREFIX = "runash.chat.messages"
@@ -70,7 +72,23 @@ const toFallbackMessage = (sessionId: string, requestId: string): ChatMessage =>
 })
 
 export default function RunAshChatPage() {
+ 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([DEFAULT_ASSISTANT_MESSAGE])
+
+  const searchParams = useSearchParams()
+  const querySessionId = searchParams.get("sessionId")
+  const bootstrapCompletedRef = useRef(false)
+  const defaultAssistantMessage: ChatMessage = {
+    id: "1",
+    content:
+      "Hello! I'm RunAshChat, your AI assistant for organic products, sustainable living, recipes, and retailing automation. How can I help you today?",
+    role: "assistant",
+    timestamp: new Date(),
+    type: "text",
+  }
+
+  const [messages, setMessages] = useState<ChatMessage[]>([defaultAssistantMessage])
+
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null)
@@ -90,6 +108,109 @@ export default function RunAshChatPage() {
   })
 
   const [voiceEnabled, setVoiceEnabled] = useState(false)
+
+  const [chatSessions] = useState<ChatSession[]>([
+    {
+      id: "1",
+      title: "Organic Breakfast Ideas",
+      messages: [
+        {
+          id: "s1-1",
+          content: "Can you suggest a few organic vegan breakfast ideas under $20?",
+          role: "user",
+          timestamp: new Date(Date.now() - 86400000),
+          type: "text",
+        },
+        {
+          id: "s1-2",
+          content: "Absolutely — try overnight oats, tofu scramble wraps, and fruit-chia parfaits.",
+          role: "assistant",
+          timestamp: new Date(Date.now() - 86300000),
+          type: "text",
+        },
+      ],
+      createdAt: new Date(Date.now() - 86400000),
+      updatedAt: new Date(Date.now() - 86400000),
+      context: {
+        preferences: {
+          dietaryRestrictions: ["vegan"],
+          sustainabilityPriority: "high",
+          budgetRange: [0, 50],
+          preferredCategories: ["fruits-vegetables"],
+          cookingSkillLevel: "beginner",
+        },
+        currentCart: [],
+        recentSearches: ["organic oats", "plant milk"],
+      },
+    },
+    {
+      id: "2",
+      title: "Store Automation Setup",
+      messages: [
+        {
+          id: "s2-1",
+          content: "How do I automate low-stock alerts for my store?",
+          role: "user",
+          timestamp: new Date(Date.now() - 172800000),
+          type: "text",
+        },
+        {
+          id: "s2-2",
+          content: "Set reorder thresholds per SKU and trigger notifications when inventory drops below limits.",
+          role: "assistant",
+          timestamp: new Date(Date.now() - 172700000),
+          type: "text",
+        },
+      ],
+      createdAt: new Date(Date.now() - 172800000),
+      updatedAt: new Date(Date.now() - 172800000),
+      context: {
+        preferences: {
+          dietaryRestrictions: [],
+          sustainabilityPriority: "medium",
+          budgetRange: [0, 1000],
+          preferredCategories: [],
+          cookingSkillLevel: "intermediate",
+          businessType: "retail",
+        },
+        currentCart: [],
+        recentSearches: ["inventory management", "POS system"],
+      },
+    },
+    {
+      id: "3",
+      title: "Sustainable Living Tips",
+      messages: [
+        {
+          id: "s3-1",
+          content: "What are easy ways to reduce daily household waste?",
+          role: "user",
+          timestamp: new Date(Date.now() - 259200000),
+          type: "text",
+        },
+        {
+          id: "s3-2",
+          content: "Start with reusable bags, meal planning, and composting food scraps.",
+          role: "assistant",
+          timestamp: new Date(Date.now() - 259100000),
+          type: "text",
+        },
+      ],
+      createdAt: new Date(Date.now() - 259200000),
+      updatedAt: new Date(Date.now() - 259200000),
+      context: {
+        preferences: {
+          dietaryRestrictions: [],
+          sustainabilityPriority: "high",
+          budgetRange: [0, 100],
+          preferredCategories: [],
+          cookingSkillLevel: "advanced",
+        },
+        currentCart: [],
+        recentSearches: ["zero waste", "renewable energy"],
+      },
+    },
+  ])
 
   const quickActions: QuickAction[] = [
     {
@@ -130,12 +251,44 @@ export default function RunAshChatPage() {
     inputRef.current?.focus()
   }, [])
 
+ 
   useEffect(() => {
     const storedSessionId = window.localStorage.getItem(ACTIVE_SESSION_KEY)
     if (storedSessionId) {
       setActiveSessionId(storedSessionId)
       return
     }
+
+  const loadSession = (session: ChatSession) => {
+    setCurrentSession(session)
+    setMessages(session.messages.length > 0 ? session.messages : [defaultAssistantMessage])
+  }
+
+  useEffect(() => {
+    if (!querySessionId) return
+
+    const matchedSession = chatSessions.find((session) => session.id === querySessionId)
+    if (!matchedSession) return
+
+    loadSession(matchedSession)
+  }, [querySessionId, chatSessions])
+
+  useEffect(() => {
+    if (bootstrapCompletedRef.current) return
+
+    bootstrapCompletedRef.current = true
+    const storedPrompt = localStorage.getItem("runash_initial_prompt")?.trim()
+    if (!storedPrompt) return
+
+    localStorage.removeItem("runash_initial_prompt")
+    handleSendMessage(storedPrompt)
+  }, [])
+
+  const handleQuickAction = (message: string) => {
+    setInputValue(message)
+    handleSendMessage(message)
+  }
+
 
     window.localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId)
   }, [activeSessionId])
@@ -256,6 +409,7 @@ export default function RunAshChatPage() {
     }
   }
 
+ 
   const handleQuickAction = (message: string) => {
     setInputValue(message)
     handleSendMessage(message)
@@ -473,6 +627,9 @@ export default function RunAshChatPage() {
     }
   }
 
+  const generateAIResponse = (userInput: string): ChatMessage => generateChatResponse(userInput)
+
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -536,10 +693,15 @@ export default function RunAshChatPage() {
         {sidebarOpen && (
           <div className="w-80">
             <ChatSidebar
+ 
               onSessionSelect={(session) => {
                 setCurrentSession(session)
                 setActiveSessionId(session.id)
               }}
+
+              sessions={chatSessions}
+              onSessionSelect={loadSession}
+
               currentSession={currentSession}
             />
           </div>

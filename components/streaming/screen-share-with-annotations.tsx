@@ -12,13 +12,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import AnnotationManager from "./annotation/annotation-manager"
 
 interface ScreenShareWithAnnotationsProps {
-  isActive: boolean
-  onStart: (stream: MediaStream) => void
-  onStop: () => void
+  isStreaming: boolean
 }
 
-export default function ScreenShareWithAnnotations({ isActive, onStart, onStop }: ScreenShareWithAnnotationsProps) {
-  const [isSharing, setIsSharing] = useState(isActive)
+export default function ScreenShareWithAnnotations({ isStreaming }: ScreenShareWithAnnotationsProps) {
+  const [isSharing, setIsSharing] = useState(isStreaming)
   const [availableScreens, setAvailableScreens] = useState<string[]>([])
   const [selectedScreen, setSelectedScreen] = useState<string>("entire-screen")
   const [frameRate, setFrameRate] = useState<number>(30)
@@ -30,10 +28,10 @@ export default function ScreenShareWithAnnotations({ isActive, onStart, onStop }
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Update isSharing when isActive prop changes
+  // Update isSharing when parent streaming state changes
   useEffect(() => {
-    setIsSharing(isActive)
-  }, [isActive])
+    setIsSharing(isStreaming)
+  }, [isStreaming])
 
   // Start screen sharing
   const startScreenShare = async () => {
@@ -59,7 +57,6 @@ export default function ScreenShareWithAnnotations({ isActive, onStart, onStop }
       }
 
       setIsSharing(true)
-      onStart(stream)
     } catch (error) {
       console.error("Error starting screen share:", error)
     }
@@ -75,7 +72,6 @@ export default function ScreenShareWithAnnotations({ isActive, onStart, onStop }
 
     setIsSharing(false)
     setAnnotationsEnabled(false)
-    onStop()
   }
 
   // Toggle screen sharing
