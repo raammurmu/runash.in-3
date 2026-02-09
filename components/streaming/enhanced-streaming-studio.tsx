@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
   Mic,
@@ -55,8 +55,14 @@ import MultiPlatformStreaming from "./multi-platform-streaming"
 import AlertDisplay from "./alerts/alert-display"
 import StreamChat from "./stream-chat"
 import { MultiHostManager } from "./multi-host/multi-host-manager"
+import {
+  type MediaAIPipelineSettings,
+  defaultMediaAIPipelineSettings,
+  MediaAIPipeline,
+} from "@/services/media-ai-pipeline"
 
 export function EnhancedStreamingStudio() {
+  const pipeline = useMemo(() => new MediaAIPipeline(), [])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
@@ -69,7 +75,27 @@ export function EnhancedStreamingStudio() {
   const [activePlatforms, setActivePlatforms] = useState<string[]>([])
   const [selectedLayout, setSelectedLayout] = useState("standard")
   const [streamQuality, setStreamQuality] = useState(85)
+  const [aiSettings, setAiSettings] = useState<MediaAIPipelineSettings>(defaultMediaAIPipelineSettings)
   const router = useRouter()
+
+  useEffect(() => {
+    setAiSettings(pipeline.restoreSettings())
+  }, [pipeline])
+
+  useEffect(() => {
+    pipeline.persistSettings(aiSettings)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        "runash.stream.session.metadata",
+        JSON.stringify({
+          updatedAt: new Date().toISOString(),
+          aiSettings,
+          streamQuality,
+          selectedLayout,
+        }),
+      )
+    }
+  }, [aiSettings, streamQuality, selectedLayout, pipeline])
 
   // Simulated real-time data
   const [realtimeStats, setRealtimeStats] = useState({
@@ -325,9 +351,7 @@ export function EnhancedStreamingStudio() {
                   <h3 className="text-sm font-medium">Video Quality</h3>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Quality: {streamQuality}%</span>
-                    <span className="text-xs text-muted-foreground">
-                      {streamQuality < 50 ? "Low" : streamQuality < 75 ? "Medium" : "High"}
-                    </span>
+                    <span className="text-xs text-muted-foreground">{aiSettings.qualityMode}</span>
                   </div>
                   <Slider
                     value={[streamQuality]}
@@ -368,11 +392,22 @@ export function EnhancedStreamingStudio() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Noise Suppression</span>
-                      <Switch defaultChecked />
+                      <Switch
+                        checked={aiSettings.audioDenoise}
+                        onCheckedChange={(checked) => setAiSettings((prev) => ({ ...prev, audioDenoise: checked }))}
+                      />
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm">Echo Cancellation</span>
-                      <Switch defaultChecked />
+                      <span className="text-sm">Light Correction</span>
+                      <Switch
+                        checked={aiSettings.lightCorrection}
+                        onCheckedChange={(checked) =>
+                          setAiSettings((prev) => ({
+                            ...prev,
+                            lightCorrection: checked,
+                          }))
+                        }
+                      />
                     </div>
                   </div>
                 </div>
@@ -402,7 +437,11 @@ export function EnhancedStreamingStudio() {
           <div className="h-full flex flex-col">
             {/* Stream Preview */}
             <div className="relative flex-1 bg-black overflow-hidden">
-              <ScreenShareWithAnnotations isStreaming={isStreaming} />
+              <ScreenShareWithAnnotations
+                isStreaming={isStreaming}
+                initialSettings={aiSettings}
+                onSettingsChange={setAiSettings}
+              />
 
               {/* Stream Info Overlay */}
               {isStreaming && (

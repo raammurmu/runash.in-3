@@ -60,7 +60,12 @@ import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "@/components/ui/use-toast"
-import type { RecentStream } from "@/lib/dashboard-service"
+import type {
+  DashboardRecentStream,
+  DashboardRecentStreamsResponse,
+  InviteCollaboratorResponse,
+  StartStreamResponse,
+} from "@/lib/types/dashboard-streams"
 
 interface StatCardProps {
   title: string
@@ -99,7 +104,9 @@ function StatCard({ title, value, icon, description, trend, className }: StatCar
   )
 }
 
-function StreamCard({ stream }: { stream: RecentStream }) {
+type StreamCardData = DashboardRecentStream & { thumbnail_url?: string }
+
+function StreamCard({ stream }: { stream: StreamCardData }) {
   const [isPlaying, setIsPlaying] = useState(false)
 
   return (
@@ -297,13 +304,20 @@ export function EnhancedDashboard() {
 
       // 1) fetch current user (real)
       const meRes = await fetch("/api/me")
+ 
+      let resolvedUserId: string | number | undefined
+
+      let me: any | null = null
+
       if (meRes.ok) {
-        const me = await meRes.json()
+        me = await meRes.json()
         setUser(me)
+        resolvedUserId = me?.id
       } else {
         setUser(null)
       }
 
+ 
       // 2) fetch dashboard data via authenticated session (cookies)
       const [statsRes, streamsRes, activityRes, achievementsRes, goalsRes] = await Promise.all([
         fetch("/api/dashboard/stats"),
@@ -311,6 +325,24 @@ export function EnhancedDashboard() {
         fetch("/api/dashboard/activity?limit=10"),
         fetch("/api/dashboard/achievements"),
         fetch("/api/dashboard/goals"),
+
+ 
+      const effectiveUserId = resolvedUserId || user?.id || undefined
+
+      const userId = me?.id || user?.id || undefined
+
+
+      // 2) fetch dashboard data using real user id when available
+      const headers: Record<string, string> = {}
+      if (effectiveUserId) headers["x-user-id"] = String(effectiveUserId)
+
+      const [statsRes, streamsRes, activityRes, achievementsRes, goalsRes] = await Promise.all([
+        fetch("/api/dashboard/stats", { headers }),
+        fetch("/api/dashboard/streams/recent?limit=12", { headers }),
+        fetch("/api/dashboard/activity?limit=10", { headers }),
+        fetch("/api/dashboard/achievements", { headers }),
+        fetch("/api/dashboard/goals", { headers }),
+
       ])
 
       if (statsRes.ok) {
@@ -321,8 +353,8 @@ export function EnhancedDashboard() {
       }
 
       if (streamsRes.ok) {
-        const streamsData = await streamsRes.json()
-        setRecentStreams(streamsData)
+        const streamsData = (await streamsRes.json()) as DashboardRecentStreamsResponse
+        setRecentStreams(Array.isArray(streamsData.streams) ? streamsData.streams : [])
       } else {
         setRecentStreams([])
       }
@@ -383,13 +415,14 @@ export function EnhancedDashboard() {
     try {
       setIsLoading(true)
       const payload = { title: startTitle || "Untitled Stream", category: startCategory }
-      const res = await fetch("/api/streams/start", {
+      const res = await fetch("/api/dashboard/streams/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
       if (res.ok) {
-        toast({ title: "Stream started", description: "Your stream is now live." })
+        const started = (await res.json()) as StartStreamResponse
+        toast({ title: "Stream started", description: `${started.title} is now ${started.status}.` })
         setStartDialogOpen(false)
         // optimistic refresh
         await loadDashboardData()
@@ -407,8 +440,8 @@ export function EnhancedDashboard() {
   const handleScheduleStream = async () => {
     try {
       setIsLoading(true)
-      const payload = { title: scheduleTitle || "Scheduled Stream", category: scheduleCategory, when: scheduleDate }
-      const res = await fetch("/api/streams/schedule", {
+      const payload = { title: scheduleTitle || "Scheduled Stream", category: scheduleCategory, startsAt: scheduleDate }
+      const res = await fetch("/api/dashboard/streams/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -432,6 +465,7 @@ export function EnhancedDashboard() {
     try {
       setIsLoading(true)
       const emails = inviteEmails.split(",").map((e) => e.trim()).filter(Boolean)
+ 
       const res = await fetch("/api/collaborators/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -439,11 +473,38 @@ export function EnhancedDashboard() {
       })
       if (res.ok) {
         toast({ title: "Invites sent", description: `${emails.length} collaborator(s) invited.` })
+
+      const targetStreamId = recentStreams[0]?.id
+
+      if (!targetStreamId) {
+        toast({ title: "Invite failed", description: "No stream available to invite collaborators to.", variant: "destructive" })
+        return
+      }
+
+      const inviteResults = await Promise.all(
+        emails.map(async (email) => {
+          const response = await fetch("/api/dashboard/streams/invite", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(user?.id ? { "x-user-id": String(user.id) } : {}) },
+            body: JSON.stringify({ streamId: targetStreamId, email }),
+          })
+
+          if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(errorText || `Failed to invite ${email}`)
+          }
+
+          return (await response.json()) as InviteCollaboratorResponse
+        }),
+      )
+
+      if (inviteResults.length > 0) {
+        toast({ title: "Invites sent", description: `${inviteResults.length} collaborator(s) invited.` })
+
         setInviteDialogOpen(false)
         setInviteEmails("")
       } else {
-        const err = await res.text()
-        toast({ title: "Invite failed", description: err || "Unknown error", variant: "destructive" })
+        toast({ title: "Invite failed", description: "No collaborator invites were sent.", variant: "destructive" })
       }
     } catch (e) {
       toast({ title: "Error", description: "Unable to send invites", variant: "destructive" })
