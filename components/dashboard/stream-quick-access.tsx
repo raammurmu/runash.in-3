@@ -37,17 +37,36 @@ type ScheduledStream = {
   status: "scheduled" | "cancelled"
 }
 
+const STREAM_CATEGORIES = [
+  { value: "grocery", label: "Grocery" },
+  { value: "sustainable", label: "Sustainable" },
+  { value: "recipes", label: "Recipes" },
+  { value: "gaming", label: "Gaming" },
+  { value: "education", label: "Education" },
+  { value: "technology", label: "Technology" },
+  { value: "entertainment", label: "Entertainment" },
+] as const
+
+type StreamCategory = (typeof STREAM_CATEGORIES)[number]["value"]
+
+const DEFAULT_STREAM_CATEGORY: StreamCategory = STREAM_CATEGORIES[0].value
+const STREAM_CATEGORY_VALUES = new Set<StreamCategory>(STREAM_CATEGORIES.map(({ value }) => value))
+
+function isStreamCategory(value: string): value is StreamCategory {
+  return STREAM_CATEGORY_VALUES.has(value as StreamCategory)
+}
+
 export function StreamQuickAccess() {
   const router = useRouter()
   const [streamTitle, setStreamTitle] = useState("")
-  const [streamCategory, setStreamCategory] = useState("gaming")
+  const [streamCategory, setStreamCategory] = useState<StreamCategory>(DEFAULT_STREAM_CATEGORY)
   const [recentStreams, setRecentStreams] = useState<RecentStream[]>([])
   const [scheduledStreams, setScheduledStreams] = useState<ScheduledStream[]>([])
   const [loading, setLoading] = useState(false)
 
   // Scheduling
   const [scheduleTitle, setScheduleTitle] = useState("")
-  const [scheduleCategory, setScheduleCategory] = useState("gaming")
+  const [scheduleCategory, setScheduleCategory] = useState<StreamCategory>(DEFAULT_STREAM_CATEGORY)
   const [scheduleDateTime, setScheduleDateTime] = useState("")
 
   // Invite
@@ -94,10 +113,11 @@ export function StreamQuickAccess() {
 
     try {
       setLoading(true)
+      const selectedCategory = STREAM_CATEGORY_VALUES.has(streamCategory) ? streamCategory : DEFAULT_STREAM_CATEGORY
       const res = await fetch("/api/dashboard/streams/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: streamTitle, category: streamCategory }),
+        body: JSON.stringify({ title: streamTitle, category: selectedCategory }),
       })
 
       if (!res.ok) {
@@ -132,12 +152,13 @@ export function StreamQuickAccess() {
 
     try {
       setLoading(true)
+      const selectedCategory = STREAM_CATEGORY_VALUES.has(scheduleCategory) ? scheduleCategory : DEFAULT_STREAM_CATEGORY
       const res = await fetch("/api/dashboard/streams/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: scheduleTitle,
-          category: scheduleCategory,
+          category: selectedCategory,
           dateTime: scheduleDateTime,
         }),
       })
@@ -246,35 +267,20 @@ export function StreamQuickAccess() {
               </div>
               <div className="space-y-2">
                 <Label>Category</Label>
-                <RadioGroup value={streamCategory} onValueChange={setStreamCategory}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="gaming" id="gaming" />
-                    <Label htmlFor="gaming">Grocery</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="education" id="education" />
-                    <Label htmlFor="education">Sustainable</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="education" id="education" />
-                    <Label htmlFor="education">Recipes</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="education" id="education" />
-                    <Label htmlFor="education">Gaming</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="education" id="education" />
-                    <Label htmlFor="education">Education</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="technology" id="technology" />
-                    <Label htmlFor="technology">Technology</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="entertainment" id="entertainment" />
-                    <Label htmlFor="entertainment">Entertainment</Label>
-                  </div>
+                <RadioGroup
+                  value={streamCategory}
+                  onValueChange={(value) => setStreamCategory(isStreamCategory(value) ? value : DEFAULT_STREAM_CATEGORY)}
+                >
+                  {STREAM_CATEGORIES.map((category) => {
+                    const categoryId = `stream-category-${category.value}`
+
+                    return (
+                      <div key={category.value} className="flex items-center space-x-2">
+                        <RadioGroupItem value={category.value} id={categoryId} />
+                        <Label htmlFor={categoryId}>{category.label}</Label>
+                      </div>
+                    )
+                  })}
                 </RadioGroup>
               </div>
             </div>
@@ -301,14 +307,16 @@ export function StreamQuickAccess() {
             <Input placeholder="Title" value={scheduleTitle} onChange={(e) => setScheduleTitle(e.target.value)} />
             <Input type="datetime-local" value={scheduleDateTime} onChange={(e) => setScheduleDateTime(e.target.value)} />
             <div className="flex items-center space-x-2">
-              <select value={scheduleCategory} onChange={(e) => setScheduleCategory(e.target.value)} className="rounded-md border px-2 py-1">
-                <option value="gaming">Grocery</option>
-                <option value="gaming">Sustainable</option>
-                <option value="gaming">Recipes</option>
-                <option value="gaming">Gaming</option>
-                <option value="education">Education</option>
-                <option value="technology">Technology</option>
-                <option value="entertainment">Entertainment</option>
+              <select
+                value={scheduleCategory}
+                onChange={(e) => setScheduleCategory(isStreamCategory(e.target.value) ? e.target.value : DEFAULT_STREAM_CATEGORY)}
+                className="rounded-md border px-2 py-1"
+              >
+                {STREAM_CATEGORIES.map((category) => (
+                  <option key={`schedule-category-${category.value}`} value={category.value}>
+                    {category.label}
+                  </option>
+                ))}
               </select>
               <Button onClick={handleScheduleStream} disabled={loading}>
                 Schedule
