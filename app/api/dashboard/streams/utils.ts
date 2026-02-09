@@ -1,19 +1,27 @@
 import { promises as fs } from "fs"
 import path from "path"
+import type { DashboardStreamsStore } from "@/lib/types/dashboard-streams"
 
 export const DATA_FILE = path.join(process.cwd(), "data", "streams.json")
 
-export async function readData() {
+const EMPTY_STORE: DashboardStreamsStore = { recent: [], scheduled: [], invites: [] }
+
+export async function readData(): Promise<DashboardStreamsStore> {
   try {
     const raw = await fs.readFile(DATA_FILE, "utf-8")
-    return JSON.parse(raw)
-  } catch (err) {
-    // If file doesn't exist or is invalid, return defaults
-    return { recent: [], scheduled: [], invites: [] }
+    const parsed = JSON.parse(raw) as Partial<DashboardStreamsStore>
+
+    return {
+      recent: Array.isArray(parsed.recent) ? parsed.recent : [],
+      scheduled: Array.isArray(parsed.scheduled) ? parsed.scheduled : [],
+      invites: Array.isArray(parsed.invites) ? parsed.invites : [],
+    }
+  } catch {
+    return EMPTY_STORE
   }
 }
 
-export async function writeData(data: any) {
+export async function writeData(data: DashboardStreamsStore) {
   await fs.mkdir(path.join(process.cwd(), "data"), { recursive: true })
   await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), "utf-8")
 }
