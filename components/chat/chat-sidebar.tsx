@@ -1,103 +1,138 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus, Trash2 } from "lucide-react"
-import type { ChatSession } from "@/types/runash-chat"
+import type { ChatMessage, ChatSession } from "@/types/runash-chat"
 
 interface ChatSidebarProps {
   onSessionSelect: (session: ChatSession) => void
   currentSession: ChatSession | null
 }
 
+interface ApiChatSession {
+  id: string
+  title: string
+  created_at: string
+  updated_at: string
+  context: ChatSession["context"]
+  messages?: Array<{
+    id: string
+    role: "user" | "assistant"
+    content: string
+    type?: ChatMessage["type"]
+    metadata?: ChatMessage["metadata"]
+    created_at: string
+  }>
+}
+
+function toChatSession(session: ApiChatSession): ChatSession {
+  return {
+    id: session.id,
+    title: session.title,
+    createdAt: new Date(session.created_at),
+    updatedAt: new Date(session.updated_at),
+    context: session.context,
+    messages: Array.isArray(session.messages)
+      ? session.messages.map((message) => ({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          type: message.type,
+          metadata: message.metadata,
+          timestamp: new Date(message.created_at),
+        }))
+      : [],
+  }
+}
+
 export default function ChatSidebar({ onSessionSelect, currentSession }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
-  // Mock chat sessions
-  const [sessions] = useState<ChatSession[]>([
-    {
-      id: "1",
-      title: "Organic Breakfast Ideas",
-      messages: [],
-      createdAt: new Date(Date.now() - 86400000),
-      updatedAt: new Date(Date.now() - 86400000),
-      context: {
-        preferences: {
-          dietaryRestrictions: ["vegan"],
-          sustainabilityPriority: "high",
-          budgetRange: [0, 50],
-          preferredCategories: ["fruits-vegetables"],
-          cookingSkillLevel: "beginner",
-        },
-        currentCart: [],
-        recentSearches: ["organic oats", "plant milk"],
-      },
-    },
-    {
-      id: "2",
-      title: "Store Automation Setup",
-      messages: [],
-      createdAt: new Date(Date.now() - 172800000),
-      updatedAt: new Date(Date.now() - 172800000),
-      context: {
-        preferences: {
-          dietaryRestrictions: [],
-          sustainabilityPriority: "medium",
-          budgetRange: [0, 1000],
-          preferredCategories: [],
-          cookingSkillLevel: "intermediate",
-          businessType: "retail",
-        },
-        currentCart: [],
-        recentSearches: ["inventory management", "POS system"],
-      },
-    },
-    {
-      id: "3",
-      title: "Sustainable Living Tips",
-      messages: [],
-      createdAt: new Date(Date.now() - 259200000),
-      updatedAt: new Date(Date.now() - 259200000),
-      context: {
-        preferences: {
-          dietaryRestrictions: [],
-          sustainabilityPriority: "high",
-          budgetRange: [0, 100],
-          preferredCategories: [],
-          cookingSkillLevel: "advanced",
-        },
-        currentCart: [],
-        recentSearches: ["zero waste", "renewable energy"],
-      },
-    },
-  ])
+  useEffect(() => {
+    const loadSessions = async () => {
+      setIsLoading(true)
+      try {
+        const res = await fetch("/api/sessions")
+        if (!res.ok) throw new Error("Failed to load sessions")
 
-  const filteredSessions = sessions.filter((session) => session.title.toLowerCase().includes(searchQuery.toLowerCase()))
+        const data = (await res.json()) as ApiChatSession[]
+        setSessions(data.map(toChatSession))
+      } catch (error) {
+        console.error("Unable to load chat sessions", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
 
-  const handleNewChat = () => {
-    // Create new chat session
-    console.log("Create new chat")
+    loadSessions()
+  }, [])
+
+  const filteredSessions = useMemo(
+    () => sessions.filter((session) => session.title.toLowerCase().includes(searchQuery.toLowerCase().trim())),
+    [sessions, searchQuery],
+  )
+
+  const handleNewChat = async () => {
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "New Chat" }),
+      })
+
+      if (!res.ok) throw new Error("Failed to create session")
+
+      const created = toChatSession((await res.json()) as ApiChatSession)
+      setSessions((prev) => [created, ...prev])
+      onSessionSelect(created)
+    } catch (error) {
+      console.error("Unable to create chat session", error)
+    }
   }
 
-  const handleDeleteSession = (sessionId: string) => {
-    // Delete session
-    console.log("Delete session:", sessionId)
+  const handleDeleteSession = async (sessionId: string) => {
+    const confirmed = window.confirm("Delete this chat session? This cannot be undone.")
+    if (!confirmed) return
+
+    const previousSessions = sessions
+    setPendingDeleteId(sessionId)
+    setSessions((prev) => prev.filter((session) => session.id !== sessionId))
+
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Failed to delete session")
+    } catch (error) {
+      console.error("Unable to delete chat session", error)
+      setSessions(previousSessions)
+    } finally {
+      setPendingDeleteId(null)
+    }
+  }
+
+  const handleSelectSession = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`)
+      if (!res.ok) throw new Error("Failed to load session")
+      const fullSession = toChatSession((await res.json()) as ApiChatSession)
+      onSessionSelect(fullSession)
+      setSessions((prev) => prev.map((session) => (session.id === fullSession.id ? fullSession : session)))
+    } catch (error) {
+      console.error("Unable to load selected session", error)
+    }
   }
 
   const getSessionIcon = (session: ChatSession) => {
-    if (session.context.preferences.businessType) {
-      return "🏪"
-    }
-    if (session.context.recentSearches.some((search) => search.includes("recipe") || search.includes("cook"))) {
-      return "👨‍🍳"
-    }
-    if (session.context.preferences.sustainabilityPriority === "high") {
-      return "🌱"
-    }
+    if (session.context.preferences.businessType) return "🏪"
+    if (session.context.recentSearches.some((search) => search.includes("recipe") || search.includes("cook"))) return "👨‍🍳"
+    if (session.context.preferences.sustainabilityPriority === "high") return "🌱"
     return "💬"
   }
 
@@ -124,13 +159,16 @@ export default function ChatSidebar({ onSessionSelect, currentSession }: ChatSid
       <CardContent className="p-0">
         <ScrollArea className="h-[calc(100vh-300px)]">
           <div className="space-y-2 p-3">
+            {isLoading && <p className="text-sm text-muted-foreground">Loading sessions...</p>}
+            {!isLoading && filteredSessions.length === 0 && <p className="text-sm text-muted-foreground">No sessions found.</p>}
+
             {filteredSessions.map((session) => (
               <div
                 key={session.id}
                 className={`group relative rounded-lg border p-3 cursor-pointer transition-colors hover:bg-muted/50 ${
                   currentSession?.id === session.id ? "bg-muted border-orange-500" : ""
                 }`}
-                onClick={() => onSessionSelect(session)}
+                onClick={() => handleSelectSession(session.id)}
               >
                 <div className="flex items-start space-x-3">
                   <div className="text-lg">{getSessionIcon(session)}</div>
@@ -161,6 +199,7 @@ export default function ChatSidebar({ onSessionSelect, currentSession }: ChatSid
                   <Button
                     variant="ghost"
                     size="sm"
+                    disabled={pendingDeleteId === session.id}
                     onClick={(e) => {
                       e.stopPropagation()
                       handleDeleteSession(session.id)
