@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -28,7 +29,14 @@ export default function ProductCard({ product }: ProductCardProps) {
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
       <div className="relative">
-        <img src={product.image || "/placeholder.svg"} alt={product.name} className="w-full h-32 object-cover" />
+        <Image
+          src={product.image || "/placeholder.svg"}
+          alt={product.name}
+          width={320}
+          height={128}
+          sizes="(max-width: 768px) 100vw, 320px"
+          className="h-32 w-full object-cover"
+        />
         {product.isOrganic && (
           <Badge className="absolute top-2 left-2 bg-green-600 text-white">
             <Leaf className="h-3 w-3 mr-1" />
@@ -75,10 +83,10 @@ export default function ProductCard({ product }: ProductCardProps) {
             <ShoppingCart className="h-3 w-3 mr-1" />
             {product.inStock ? "Add to Cart" : "Out of Stock"}
           </Button>
-          <Button variant="outline" size="sm" onClick={handleViewDetails}>
+          <Button variant="outline" size="sm" onClick={handleViewDetails} aria-label={`View details for ${product.name}`}>
             <Info className="h-3 w-3" />
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" aria-label={`Add ${product.name} to favorites`}>
             <Heart className="h-3 w-3" />
           </Button>
         </div>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card } from "@/components/ui/card"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { Send, Sparkles, Leaf, Settings, History, Bot, Mic } from "lucide-react"
 import type { ChatMessage, ChatSession, UserPreferences, QuickAction } from "@/types/runash-chat"
 import ChatMessageComponent from "@/components/chat/chat-message"
@@ -298,7 +299,7 @@ export default function RunAshChatPage() {
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
@@ -338,15 +339,21 @@ export default function RunAshChatPage() {
                 <Settings className="h-4 w-4 mr-2" />
                 Preferences
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
-                <History className="h-4 w-4 mr-2" />
-                History
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setSidebarOpen((prev) => !prev)}
+                className="lg:hidden"
+                aria-label="Toggle chat history"
+              >
+                <History className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setVoiceEnabled(!voiceEnabled)}
                 className={voiceEnabled ? "bg-green-100 text-green-700" : ""}
+                aria-label={voiceEnabled ? "Disable voice input" : "Enable voice input"}
               >
                 <Mic className="h-4 w-4 mr-2" />
                 {voiceEnabled ? "Voice On" : "Voice Off"}
@@ -356,17 +363,24 @@ export default function RunAshChatPage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6 flex gap-6">
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <div className="w-80">
-            <ChatSidebar onSessionSelect={(session) => setCurrentSession(session)} currentSession={currentSession} />
-          </div>
-        )}
+      <div className="container mx-auto flex min-h-[calc(100vh-88px)] flex-1 gap-6 px-4 py-4 sm:py-6">
+        {/* Desktop Sidebar */}
+        <aside className="hidden w-80 shrink-0 lg:block">
+          <ChatSidebar onSessionSelect={(session) => setCurrentSession(session)} currentSession={currentSession} />
+        </aside>
+
+        {/* Mobile Sidebar */}
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetContent side="left" className="w-[85vw] max-w-sm p-0">
+            <div className="h-full p-4">
+              <ChatSidebar onSessionSelect={(session) => setCurrentSession(session)} currentSession={currentSession} />
+            </div>
+          </SheetContent>
+        </Sheet>
 
         {/* Main Chat Area */}
-        <div className="flex-1 max-w-4xl mx-auto">
-          <Card className="h-[calc(100vh-200px)] flex flex-col">
+        <div className="mx-auto flex min-w-0 max-w-4xl flex-1">
+          <Card className="flex min-h-[70vh] flex-1 flex-col sm:min-h-[calc(100vh-200px)]">
             {/* Quick Actions */}
             <div className="p-4 border-b">
               <QuickActions actions={quickActions} />
@@ -419,7 +433,7 @@ export default function RunAshChatPage() {
                   ref={inputRef}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
+                  onKeyDown={handleKeyDown}
                   placeholder="Ask about organic products, recipes, sustainability tips, or retail automation..."
                   className="flex-1"
                 />
@@ -427,6 +441,7 @@ export default function RunAshChatPage() {
                   onClick={() => handleSendMessage()}
                   disabled={!inputValue.trim()}
                   className="bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-700 hover:to-yellow-600 text-white"
+                  aria-label="Send message"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
