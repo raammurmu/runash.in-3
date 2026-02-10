@@ -23,8 +23,7 @@ interface AnalyticsExportProps {
  * - Provides progress state and helpful error handling/fallbacks.
  *
  * Notes:
- * - For image export we attempt to dynamically import `html2canvas` if installed in the app.
- *   If it's not available we fall back to opening a printable view (user can save as PDF or take a screenshot).
+ * - Image export opens a printable view so users can capture/save via browser tools without optional dependencies.
  * - The API is expected to return an array of plain objects like:
  *   [{ date: "2025-12-01", page: "/", views: 123, visitors: 45 }, ...]
  */
@@ -163,54 +162,29 @@ export function AnalyticsExport({ filters }: AnalyticsExportProps) {
   }
 
   async function exportImage(data: Array<Record<string, any>>) {
-    // Prefer using html2canvas if available; otherwise open printable view for manual screenshot or Save as PDF
-    // We render a hidden printable element in the current DOM so html2canvas can capture it
     const printable = printableRef.current
     if (!printable) {
       alert("Printable area not available for image export.")
       return
     }
 
-    // Fill printable area with our table
-    printable.innerHTML = buildPrintableHtmlInner(data)
-
-    // Try dynamic import of html2canvas
-    try {
-      // @ts-ignore - dynamic import, may not exist in the project
-      const html2canvas = (await import("html2canvas")).default
-      const canvas = await html2canvas(printable, { scale: 2 })
-      const png = canvas.toDataURL("image/png")
-      const nameParts = [
-        "analytics",
-        filters?.page || "all",
-        new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-"),
-      ]
-      const name = filenameSafe(nameParts.join("-")) + ".png"
-      const res = await fetch(png)
-      const blob = await res.blob()
-      downloadBlob(blob, "image/png", name)
-      // cleanup
-      printable.innerHTML = ""
-      return
-    } catch (err) {
-      // html2canvas not available or failed - fallback to printable window
-      console.warn("html2canvas not available or failed:", err)
-      printable.innerHTML = ""
-      const html = buildPrintableHtml(data)
-      const win = window.open("", "_blank", "noopener,noreferrer")
-      if (!win) {
-        alert(
-          "Could not open a new window for image export. Please allow popups or try another format."
-        )
-        return
-      }
-      win.document.write(html)
-      win.document.close()
+    printable.innerHTML = ""
+    const html = buildPrintableHtml(data)
+    const win = window.open("", "_blank", "noopener,noreferrer")
+    if (!win) {
       alert(
-        "Image export fallback: content opened in a new tab. Use your browser's 'Save as' or a screenshot tool to capture it."
+        "Could not open a new window for image export. Please allow popups or try another format."
       )
+      return
     }
+
+    win.document.write(html)
+    win.document.close()
+    alert(
+      "Image export opened in a new tab. Use browser screenshot or Save As tools to capture the report image."
+    )
   }
+
 
   function buildPrintableHtmlInner(data: Array<Record<string, any>>) {
     const cols = data.length ? Object.keys(data[0]) : []
@@ -274,7 +248,7 @@ export function AnalyticsExport({ filters }: AnalyticsExportProps) {
 
   return (
     <>
-      {/* Hidden area used for image capture if html2canvas is available */}
+      {/* Hidden area reserved for export printable content */}
       <div
         ref={printableRef}
         style={{ position: "fixed", left: -9999, top: -9999, width: 1200 }}

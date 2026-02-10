@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { DndProvider } from "react-dnd"
 import { HTML5Backend } from "react-dnd-html5-backend"
 import GridLayout, { type Layout } from "react-grid-layout"
@@ -50,33 +50,78 @@ import {
   Unlock,
 } from "lucide-react"
 
-export default function CustomDashboardBuilder() {
-  const [currentDashboard, setCurrentDashboard] = useState<Dashboard>({
-    id: "custom-1",
-    name: "My Custom Dashboard",
-    description: "A personalized analytics dashboard",
-    widgets: [],
-    layout: {
-      cols: 12,
-      rowHeight: 80,
-      compactType: "vertical",
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  })
+const DRAFT_STORAGE_KEY = "custom-dashboard-draft"
 
+const createDefaultDashboard = (): Dashboard => ({
+  id: "",
+  name: "My Custom Dashboard",
+  description: "A personalized analytics dashboard",
+  widgets: [],
+  layout: {
+    cols: 12,
+    rowHeight: 80,
+    compactType: "vertical",
+  },
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  isShared: false,
+  sharedWith: [],
+})
+
+export default function CustomDashboardBuilder() {
+  const [currentDashboard, setCurrentDashboard] = useState<Dashboard>(createDefaultDashboard())
   const [layouts, setLayouts] = useState<Layout[]>([])
   const [isEditMode, setIsEditMode] = useState(true)
   const [selectedWidget, setSelectedWidget] = useState<DashboardWidget | null>(null)
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false)
   const [isWidgetLibraryOpen, setIsWidgetLibraryOpen] = useState(false)
   const [isDashboardSettingsOpen, setIsDashboardSettingsOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  const loadDashboard = useCallback(async () => {
+    try {
+      const response = await fetch("/api/analytics/custom-dashboards", { cache: "no-store" })
+      if (!response.ok) {
+        throw new Error("Unable to load dashboards")
+      }
+
+      const data = (await response.json()) as { dashboards: Dashboard[] }
+      if (data.dashboards.length > 0) {
+        setCurrentDashboard(data.dashboards[0])
+        return
+      }
+
+      const draft = localStorage.getItem(DRAFT_STORAGE_KEY)
+      if (draft) {
+        const parsedDraft = JSON.parse(draft) as Dashboard
+        setCurrentDashboard({ ...parsedDraft, id: "" })
+      }
+    } catch (error) {
+      const draft = localStorage.getItem(DRAFT_STORAGE_KEY)
+      if (draft) {
+        const parsedDraft = JSON.parse(draft) as Dashboard
+        setCurrentDashboard({ ...parsedDraft, id: "" })
+      }
+      toast.error("Failed to load dashboards")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadDashboard()
+  }, [loadDashboard])
+
+  useEffect(() => {
+    if (currentDashboard.name) {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(currentDashboard))
+    }
+  }, [currentDashboard])
 
   const handleLayoutChange = useCallback(
     (newLayout: Layout[]) => {
       setLayouts(newLayout)
 
-      // Update widget positions in the dashboard
       const updatedWidgets = currentDashboard.widgets.map((widget) => {
         const layoutItem = newLayout.find((l) => l.i === widget.id)
         if (layoutItem) {
@@ -163,10 +208,39 @@ export default function CustomDashboardBuilder() {
     toast.success("Widget configuration saved")
   }, [])
 
-  const handleSaveDashboard = useCallback(() => {
-    // In a real app, this would save to a backend
-    localStorage.setItem(`dashboard-${currentDashboard.id}`, JSON.stringify(currentDashboard))
-    toast.success("Dashboard saved successfully")
+  const handleSaveDashboard = useCallback(async () => {
+    try {
+      const payload = {
+        name: currentDashboard.name,
+        description: currentDashboard.description,
+        widgets: currentDashboard.widgets,
+        layout: currentDashboard.layout,
+        isShared: currentDashboard.isShared ?? false,
+        sharedWith: currentDashboard.sharedWith ?? [],
+      }
+
+      const isExistingDashboard = Boolean(currentDashboard.id)
+      const endpoint = isExistingDashboard
+        ? `/api/analytics/custom-dashboards/${currentDashboard.id}`
+        : "/api/analytics/custom-dashboards"
+      const method = isExistingDashboard ? "PATCH" : "POST"
+
+      const response = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        throw new Error("Unable to save dashboard")
+      }
+
+      const data = (await response.json()) as { dashboard: Dashboard }
+      setCurrentDashboard(data.dashboard)
+      toast.success("Dashboard saved successfully")
+    } catch (error) {
+      toast.error("Failed to save dashboard")
+    }
   }, [currentDashboard])
 
   const handleExportDashboard = useCallback(() => {
@@ -193,10 +267,10 @@ export default function CustomDashboardBuilder() {
         const dashboard = JSON.parse(e.target?.result as string) as Dashboard
         setCurrentDashboard({
           ...dashboard,
-          id: `custom-${Date.now()}`,
+          id: "",
           updatedAt: new Date().toISOString(),
         })
-        toast.success("Dashboard imported successfully")
+        toast.success("Dashboard imported. Click Save to persist.")
       } catch (error) {
         toast.error("Failed to import dashboard")
       }
@@ -204,7 +278,7 @@ export default function CustomDashboardBuilder() {
     reader.readAsText(file)
   }, [])
 
-  const handleLoadTemplate = useCallback((template: any) => {
+  const handleLoadTemplate = useCallback((template: { name: string; widgets: DashboardWidget[] }) => {
     setCurrentDashboard((prev) => ({
       ...prev,
       widgets: template.widgets,
@@ -213,10 +287,13 @@ export default function CustomDashboardBuilder() {
     toast.success(`Template "${template.name}" loaded`)
   }, [])
 
+  if (isLoading) {
+    return <div className="p-4 text-sm text-muted-foreground">Loading dashboard...</div>
+  }
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex flex-col h-full">
-        {/* Header */}
         <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center gap-4">
@@ -310,7 +387,6 @@ export default function CustomDashboardBuilder() {
           </div>
         </div>
 
-        {/* Dashboard Grid */}
         <div className="flex-1 p-4 overflow-auto bg-muted/30">
           {currentDashboard.widgets.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full">
@@ -394,7 +470,6 @@ export default function CustomDashboardBuilder() {
           )}
         </div>
 
-        {/* Widget Configuration Dialog */}
         {selectedWidget && (
           <WidgetConfigDialog
             widget={selectedWidget}
@@ -404,7 +479,6 @@ export default function CustomDashboardBuilder() {
           />
         )}
 
-        {/* Dashboard Settings Dialog */}
         <Dialog open={isDashboardSettingsOpen} onOpenChange={setIsDashboardSettingsOpen}>
           <DialogContent>
             <DialogHeader>
@@ -424,6 +498,35 @@ export default function CustomDashboardBuilder() {
                 <Input
                   value={currentDashboard.description}
                   onChange={(e) => setCurrentDashboard((prev) => ({ ...prev, description: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Shared dashboard</label>
+                <Button
+                  variant={currentDashboard.isShared ? "default" : "outline"}
+                  onClick={() =>
+                    setCurrentDashboard((prev) => ({
+                      ...prev,
+                      isShared: !prev.isShared,
+                    }))
+                  }
+                >
+                  {currentDashboard.isShared ? "Enabled" : "Disabled"}
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Shared With (user IDs, comma-separated)</label>
+                <Input
+                  value={(currentDashboard.sharedWith ?? []).join(",")}
+                  onChange={(e) =>
+                    setCurrentDashboard((prev) => ({
+                      ...prev,
+                      sharedWith: e.target.value
+                        .split(",")
+                        .map((item) => item.trim())
+                        .filter(Boolean),
+                    }))
+                  }
                 />
               </div>
               <div className="space-y-2">
