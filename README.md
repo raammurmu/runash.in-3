@@ -112,6 +112,7 @@ RunAsh AI combines live streaming, AI-assisted creation tooling, seller operatio
 - Seller business configuration is now API-backed (`GET/PUT /api/seller/settings`) for persisted operations.
 - Payout tab is API-backed (`GET /api/seller/payouts`) with settlement summaries and weekly history.
 - Inventory supports inline stock edits and guarded deletes for production workflows.
+- RunAsh Chat landing (`/runash-chat`) now includes an enhanced mini preview with quick agentic commerce/payment prompts that deep-link into full chat session continuity.
 
 ## Quickstart
 1. Clone repository.
@@ -182,4 +183,3 @@ We welcome contributions to the RunAsh AI live streaming platform. To contribute
 - [Team Guide](./TEAM_GUIDE.md)
 
 MIT and Apache-2.0.
-
