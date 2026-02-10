@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -16,17 +17,18 @@ import UserPreferencesDialog from "@/components/chat/user-preferences-dialog"
 import CartDrawer from "@/components/cart/cart-drawer"
 import VoiceControls from "@/components/chat/voice-controls"
 
+const DEFAULT_WELCOME_MESSAGE: ChatMessage = {
+  id: "1",
+  content:
+    "Hello! I'm RunAshChat, your AI assistant for organic products, sustainable living, recipes, and retailing automation. How can I help you today?",
+  role: "assistant",
+  timestamp: new Date(),
+  type: "text",
+}
+
 export default function RunAshChatPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "1",
-      content:
-        "Hello! I'm RunAshChat, your AI assistant for organic products, sustainable living, recipes, and retailing automation. How can I help you today?",
-      role: "assistant",
-      timestamp: new Date(),
-      type: "text",
-    },
-  ])
+  const searchParams = useSearchParams()
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([DEFAULT_WELCOME_MESSAGE])
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null)
@@ -34,6 +36,8 @@ export default function RunAshChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const initialPromptSentRef = useRef(false)
+  const loadedSessionRef = useRef<string | null>(null)
 
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({
     dietaryRestrictions: [],
@@ -79,11 +83,112 @@ export default function RunAshChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  }, [chatMessages])
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    const sessionId = searchParams.get("sessionId")
+
+    const sendInitialPromptOnce = () => {
+      if (initialPromptSentRef.current) return
+      const initialPrompt = localStorage.getItem("runash_initial_prompt")
+      if (!initialPrompt?.trim()) return
+
+      initialPromptSentRef.current = true
+      localStorage.removeItem("runash_initial_prompt")
+      handleSendMessage(initialPrompt.trim())
+    }
+
+    if (!sessionId || loadedSessionRef.current === sessionId) {
+      sendInitialPromptOnce()
+      return
+    }
+
+    loadedSessionRef.current = sessionId
+
+    const hydrateSession = async () => {
+      let historicalMessages: ChatMessage[] = []
+      let sessionTitle = `Session ${sessionId}`
+
+      try {
+        const messagesResponse = await fetch(`/api/messages/session/${sessionId}`)
+        if (messagesResponse.ok) {
+          const payload = await messagesResponse.json()
+          if (Array.isArray(payload)) {
+            historicalMessages = payload.map((message) => ({
+              id: String(message.id),
+              content: message.content,
+              role: message.role,
+              timestamp: message.created_at ? new Date(message.created_at) : new Date(message.timestamp ?? Date.now()),
+              type: message.message_type ?? message.type ?? "text",
+              metadata: message.metadata,
+            }))
+          }
+        }
+      } catch {
+        // no-op: fallback to session list lookup below
+      }
+
+      if (historicalMessages.length === 0) {
+        try {
+          const sessionsResponse = await fetch("/api/sessions")
+          if (sessionsResponse.ok) {
+            const sessions = await sessionsResponse.json()
+            const matchedSession = Array.isArray(sessions)
+              ? sessions.find((session) => String(session.id) === sessionId)
+              : null
+
+            if (matchedSession) {
+              sessionTitle = matchedSession.title ?? sessionTitle
+              if (Array.isArray(matchedSession.messages)) {
+                historicalMessages = matchedSession.messages.map((message: any) => ({
+                  ...message,
+                  id: String(message.id),
+                  timestamp: new Date(message.timestamp ?? Date.now()),
+                }))
+              }
+            }
+          }
+        } catch {
+          // no-op: fallback welcome message will be used
+        }
+      }
+
+      const hydratedMessages = historicalMessages.length > 0 ? historicalMessages : [DEFAULT_WELCOME_MESSAGE]
+      setChatMessages(hydratedMessages)
+      setCurrentSession((prev) => ({
+        id: sessionId,
+        title: prev?.title ?? sessionTitle,
+        messages: hydratedMessages,
+        createdAt: prev?.createdAt ?? new Date(),
+        updatedAt: new Date(),
+        context: prev?.context ?? {
+          preferences: userPreferences,
+          currentCart: [],
+          recentSearches: [],
+        },
+      }))
+
+      sendInitialPromptOnce()
+    }
+
+    hydrateSession()
+  }, [searchParams, userPreferences])
+
+  useEffect(() => {
+    setCurrentSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            messages: chatMessages,
+            updatedAt: new Date(),
+          }
+        : prev,
+    )
+  }, [chatMessages])
 
   const handleQuickAction = (message: string) => {
     setInputValue(message)
@@ -102,14 +207,14 @@ export default function RunAshChatPage() {
       type: "text",
     }
 
-    setMessages((prev) => [...prev, userMessage])
+    setChatMessages((prev) => [...prev, userMessage])
     setInputValue("")
     setIsTyping(true)
 
     // Simulate AI response
     setTimeout(() => {
       const response = generateAIResponse(content)
-      setMessages((prev) => [...prev, response])
+      setChatMessages((prev) => [...prev, response])
       setIsTyping(false)
     }, 1500)
   }
@@ -360,7 +465,18 @@ export default function RunAshChatPage() {
         {/* Sidebar */}
         {sidebarOpen && (
           <div className="w-80">
-            <ChatSidebar onSessionSelect={(session) => setCurrentSession(session)} currentSession={currentSession} />
+            <ChatSidebar
+              onSessionSelect={(session) => {
+                const sessionMessages = session.messages.length > 0 ? session.messages : [DEFAULT_WELCOME_MESSAGE]
+                setChatMessages(sessionMessages)
+                setCurrentSession({
+                  ...session,
+                  messages: sessionMessages,
+                  updatedAt: new Date(),
+                })
+              }}
+              currentSession={currentSession}
+            />
           </div>
         )}
 
@@ -375,7 +491,7 @@ export default function RunAshChatPage() {
             {/* Messages */}
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
-                {messages.map((message) => (
+                {chatMessages.map((message) => (
                   <ChatMessageComponent key={message.id} message={message} />
                 ))}
 
