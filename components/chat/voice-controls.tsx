@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { useToast } from "@/hooks/use-toast"
 import { Mic, Volume2, VolumeX, Settings, Square } from "lucide-react"
 import { useVoiceRecording } from "@/hooks/use-voice-recording"
 import { SpeechRecognitionService } from "@/services/speech-recognition-service"
@@ -11,15 +12,17 @@ import VoiceSettingsDialog from "./voice-settings-dialog"
 
 interface VoiceControlsProps {
   onVoiceInput: (text: string) => void
-  onSpeakResponse: (text: string) => void
   isEnabled: boolean
+  latestAssistantMessage?: string
 }
 
-export default function VoiceControls({ onVoiceInput, onSpeakResponse, isEnabled }: VoiceControlsProps) {
+export default function VoiceControls({ onVoiceInput, isEnabled, latestAssistantMessage }: VoiceControlsProps) {
   const [isListening, setIsListening] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [interimTranscript, setInterimTranscript] = useState("")
+  const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(true)
+  const [ttsSupported, setTtsSupported] = useState(true)
   const [voiceSettings, setVoiceSettings] = useState({
     rate: 1,
     pitch: 1,
@@ -30,16 +33,31 @@ export default function VoiceControls({ onVoiceInput, onSpeakResponse, isEnabled
 
   const speechRecognitionRef = useRef<SpeechRecognitionService | null>(null)
   const ttsServiceRef = useRef<TextToSpeechService | null>(null)
+  const lastAutoSpokenMessageIdRef = useRef<string | null>(null)
+  const { toast } = useToast()
   const { isRecording, audioLevel, duration, startRecording, stopRecording } = useVoiceRecording()
 
   useEffect(() => {
     speechRecognitionRef.current = new SpeechRecognitionService()
     ttsServiceRef.current = new TextToSpeechService()
+
+    setSpeechRecognitionSupported(speechRecognitionRef.current.isSupported())
+    setTtsSupported(ttsServiceRef.current.isSupported())
+
+    return () => {
+      speechRecognitionRef.current?.stopListening()
+      ttsServiceRef.current?.stop()
+      stopRecording()
+    }
   }, [])
 
   const handleStartListening = () => {
     if (!speechRecognitionRef.current?.isSupported()) {
-      alert("Speech recognition is not supported in this browser")
+      toast({
+        title: "Speech recognition unavailable",
+        description: "Your browser doesn't support voice input APIs.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -73,7 +91,11 @@ export default function VoiceControls({ onVoiceInput, onSpeakResponse, isEnabled
 
   const handleSpeakResponse = (text: string) => {
     if (!ttsServiceRef.current?.isSupported()) {
-      alert("Text-to-speech is not supported in this browser")
+      toast({
+        title: "Text-to-speech unavailable",
+        description: "Your browser doesn't support speech synthesis APIs.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -95,16 +117,28 @@ export default function VoiceControls({ onVoiceInput, onSpeakResponse, isEnabled
   }
 
   useEffect(() => {
-    if (voiceSettings.autoSpeak) {
-      // This would be called when a new AI response is received
-      // onSpeakResponse would trigger handleSpeakResponse
-    }
-  }, [voiceSettings.autoSpeak])
+    if (!voiceSettings.autoSpeak || !latestAssistantMessage || !ttsSupported) return
+
+    if (lastAutoSpokenMessageIdRef.current === latestAssistantMessage) return
+
+    lastAutoSpokenMessageIdRef.current = latestAssistantMessage
+    handleSpeakResponse(latestAssistantMessage)
+  }, [latestAssistantMessage, ttsSupported, voiceSettings.autoSpeak])
 
   if (!isEnabled) return null
 
   return (
     <div className="space-y-3">
+      {(!speechRecognitionSupported || !ttsSupported) && (
+        <Card className="p-3 border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+          <p className="text-sm">
+            Voice features are partially unavailable in this browser.
+            {!speechRecognitionSupported && " Voice input is disabled."}
+            {!ttsSupported && " Text-to-speech is disabled."}
+          </p>
+        </Card>
+      )}
+
       {/* Voice Activity Indicator */}
       {(isListening || interimTranscript) && (
         <Card className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800">
@@ -147,6 +181,8 @@ export default function VoiceControls({ onVoiceInput, onSpeakResponse, isEnabled
             size="sm"
             onClick={isListening ? handleStopListening : handleStartListening}
             className={isListening ? "animate-pulse" : ""}
+            disabled={!speechRecognitionSupported}
+            title={!speechRecognitionSupported ? "Speech recognition is not supported in this browser" : undefined}
           >
             {isListening ? (
               <>
@@ -165,12 +201,15 @@ export default function VoiceControls({ onVoiceInput, onSpeakResponse, isEnabled
           <Button
             variant={isSpeaking ? "destructive" : "outline"}
             size="sm"
-            onClick={
-              isSpeaking
-                ? handleStopSpeaking
-                : () => handleSpeakResponse("This is a test of the text to speech functionality.")
+            onClick={isSpeaking ? handleStopSpeaking : () => latestAssistantMessage && handleSpeakResponse(latestAssistantMessage)}
+            disabled={!ttsSupported || !latestAssistantMessage}
+            title={
+              !ttsSupported
+                ? "Text-to-speech is not supported in this browser"
+                : !latestAssistantMessage
+                  ? "No assistant message available to speak yet"
+                  : undefined
             }
-            disabled={!ttsServiceRef.current?.isSupported()}
           >
             {isSpeaking ? (
               <>

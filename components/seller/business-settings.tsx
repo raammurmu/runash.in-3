@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
+import useSWR from "swr"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,38 +10,78 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
-import { Save } from "lucide-react"
+import { RefreshCw, Save } from "lucide-react"
+
+type SellerSettings = {
+  businessName: string
+  businessType: string
+  description: string
+  businessHours: string
+  deliveryRadius: string
+  minimumOrder: string
+  returnPolicy: string
+  paymentMethods: string[]
+  shippingOptions: string[]
+  certifications: string[]
+}
+
+const defaultFormData: SellerSettings = {
+  businessName: "Green Valley Farms",
+  businessType: "organic-farm",
+  description: "Family-owned organic farm",
+  businessHours: "Mon-Sat: 8 AM - 6 PM",
+  deliveryRadius: "50",
+  minimumOrder: "25",
+  returnPolicy: "14 days money-back guarantee",
+  paymentMethods: ["credit_card", "paypal"],
+  shippingOptions: ["local_delivery", "pickup"],
+  certifications: ["usda_organic", "non_gmo"],
+}
+
+const fetcher = (url: string) =>
+  fetch(url, { headers: { "x-user-id": "1" } }).then((r) =>
+    r.ok ? r.json() : Promise.reject(new Error("Failed to load settings")),
+  )
 
 export function BusinessSettings() {
   const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    businessName: "Green Valley Farms",
-    businessType: "organic-farm",
-    description: "Family-owned organic farm...",
-    businessHours: "Mon-Sat: 8 AM - 6 PM",
-    deliveryRadius: "50",
-    minimumOrder: "25",
-    returnPolicy: "14 days money-back guarantee",
-    paymentMethods: ["credit_card", "paypal"],
-    shippingOptions: ["local_delivery", "pickup"],
-    certifications: ["usda_organic", "non_gmo"],
+  const [isSaving, setIsSaving] = useState(false)
+  const [formData, setFormData] = useState<SellerSettings>(defaultFormData)
+
+  const { data, mutate, isLoading, error } = useSWR<SellerSettings>("/api/seller/settings", fetcher, {
+    onSuccess: (payload) => setFormData({ ...defaultFormData, ...payload }),
   })
 
+  const completion = useMemo(() => {
+    const fields = [
+      formData.businessName,
+      formData.description,
+      formData.businessHours,
+      formData.deliveryRadius,
+      formData.minimumOrder,
+      formData.returnPolicy,
+    ]
+    const completed = fields.filter((f) => String(f || "").trim().length > 0).length
+    return Math.round((completed / fields.length) * 100)
+  }, [formData])
+
   const handleSave = async () => {
-    setIsLoading(true)
+    setIsSaving(true)
     try {
       const response = await fetch("/api/seller/settings", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-user-id": "1" },
         body: JSON.stringify(formData),
       })
       if (!response.ok) throw new Error("Failed to save settings")
+      const updated = await response.json()
+      setFormData({ ...defaultFormData, ...updated })
+      await mutate()
       toast({ title: "Settings saved", description: "Your business settings have been updated." })
-    } catch (error) {
+    } catch {
       toast({ title: "Error", description: "Failed to save settings.", variant: "destructive" })
     } finally {
-      setIsLoading(false)
+      setIsSaving(false)
     }
   }
 
@@ -48,12 +89,32 @@ export function BusinessSettings() {
     <div className="space-y-6">
       <Card className="border-0 shadow-lg bg-white/80 dark:bg-gray-900/80 backdrop-blur">
         <CardHeader>
-          <CardTitle>Business Configuration</CardTitle>
-          <CardDescription>Update your business operations and policies</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Business Configuration</CardTitle>
+              <CardDescription>Update your business operations and policies</CardDescription>
+            </div>
+            <Button variant="outline" onClick={() => mutate()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">Profile completion: {completion}%</p>
         </CardHeader>
+
         <CardContent className="space-y-6">
-          {/* Business Type & Hours */}
+          {isLoading && <div className="text-sm text-muted-foreground">Loading settings…</div>}
+          {error && <div className="text-sm text-red-600">Unable to load seller settings right now.</div>}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="business-name">Business Name</Label>
+              <Input
+                id="business-name"
+                value={formData.businessName}
+                onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="business-type">Business Type</Label>
               <Select
@@ -71,6 +132,9 @@ export function BusinessSettings() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="business-hours">Business Hours</Label>
               <Input
@@ -79,10 +143,6 @@ export function BusinessSettings() {
                 onChange={(e) => setFormData({ ...formData, businessHours: e.target.value })}
               />
             </div>
-          </div>
-
-          {/* Delivery Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="delivery-radius">Delivery Radius (miles)</Label>
               <Input
@@ -92,6 +152,9 @@ export function BusinessSettings() {
                 onChange={(e) => setFormData({ ...formData, deliveryRadius: e.target.value })}
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="minimum-order">Minimum Order ($)</Label>
               <Input
@@ -99,6 +162,14 @@ export function BusinessSettings() {
                 type="number"
                 value={formData.minimumOrder}
                 onChange={(e) => setFormData({ ...formData, minimumOrder: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Business Description</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
             </div>
           </div>
@@ -154,7 +225,6 @@ export function BusinessSettings() {
             </div>
           </div>
 
-          {/* Return Policy */}
           <div className="space-y-2">
             <Label htmlFor="return-policy">Return & Refund Policy</Label>
             <Textarea
@@ -165,15 +235,14 @@ export function BusinessSettings() {
             />
           </div>
 
-          {/* Save Button */}
           <div className="flex gap-2 pt-4">
             <Button
               onClick={handleSave}
-              disabled={isLoading}
+              disabled={isSaving}
               className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
             >
               <Save className="h-4 w-4 mr-2" />
-              {isLoading ? "Saving..." : "Save Settings"}
+              {isSaving ? "Saving..." : "Save Settings"}
             </Button>
           </div>
         </CardContent>

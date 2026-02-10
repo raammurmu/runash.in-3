@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { groceryProducts } from "@/lib/grocery-products"
+import { mapGroceryProductToChatProduct } from "@/lib/chat-product-recommendations"
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
     const minPrice = searchParams.get("minPrice")
     const maxPrice = searchParams.get("maxPrice")
     const sortBy = searchParams.get("sortBy") || "name"
+    const format = searchParams.get("format")
     const sortOrder = searchParams.get("sortOrder") || "asc"
     const page = Number.parseInt(searchParams.get("page") || "1")
     const limit = Number.parseInt(searchParams.get("limit") || "20")
@@ -79,8 +81,10 @@ export async function GET(request: NextRequest) {
     // Get categories for filter options
     const categories = [...new Set(groceryProducts.map((product) => product.category))]
 
+    const products = format === "chat" ? paginatedProducts.map(mapGroceryProductToChatProduct) : paginatedProducts
+
     return NextResponse.json({
-      products: paginatedProducts,
+      products,
       totalProducts: filteredProducts.length,
       totalPages: Math.ceil(filteredProducts.length / limit),
       currentPage: page,

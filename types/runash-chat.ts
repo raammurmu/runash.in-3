@@ -21,6 +21,9 @@ export interface Product {
   isOrganic: boolean
   sustainabilityScore: number
   image: string
+  imageHd?: string
+  imageThumb?: string
+  imageAlt?: string
   inStock: boolean
   certifications: string[]
   nutritionalInfo?: NutritionalInfo
@@ -39,6 +42,9 @@ export interface Recipe {
   ingredients: Ingredient[]
   instructions: string[]
   image: string
+  imageHd?: string
+  imageThumb?: string
+  imageAlt?: string
   tags: string[]
   sustainabilityScore: number
   nutritionalInfo: NutritionalInfo

@@ -1,50 +1,65 @@
-import type { NextRequest } from "next/server"
+import type { NextRequest } from "next/server";
+import { getStreamRealtimeMetrics } from "@/lib/analytics/stream-realtime";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const streamId = searchParams.get("streamId")
+  const { searchParams } = new URL(request.url);
+  const streamId = searchParams.get("streamId");
+
+  if (!streamId) {
+    return new Response("Missing streamId", { status: 400 });
+  }
 
   const stream = new ReadableStream({
     start(controller) {
-      const encoder = new TextEncoder()
+      const encoder = new TextEncoder();
 
-      // Send initial data
       const sendUpdate = async () => {
+        const startedAt = Date.now();
+
         try {
-          // Fetch current analytics data (reuse logic from realtime route)
-          const analyticsData = {
-            totalViews: Math.floor(Math.random() * 10000) + 1000,
-            currentViewers: Math.floor(Math.random() * 500) + 50,
-            peakViewers: Math.floor(Math.random() * 1000) + 100,
-            averageViewers: Math.floor(Math.random() * 300) + 75,
-            watchTime: Math.floor(Math.random() * 3600) + 1800,
-            chatMessages: Math.floor(Math.random() * 200) + 50,
-            newFollowers: Math.floor(Math.random() * 50) + 5,
-            donations: Math.floor(Math.random() * 100),
-            engagement: Math.random() * 100,
-            streamHealth: "Good" as const,
-            revenue: Math.floor(Math.random() * 1000) + 100,
-            subscriptions: Math.floor(Math.random() * 20) + 2,
-          }
+          const analyticsData = await getStreamRealtimeMetrics(streamId);
 
-          const data = `data: ${JSON.stringify(analyticsData)}\n\n`
-          controller.enqueue(encoder.encode(data))
+          const data = `data: ${JSON.stringify({
+            totalViews: analyticsData.totalViews,
+            currentViewers: analyticsData.currentViewers,
+            peakViewers: analyticsData.peakViewers,
+            averageViewers: analyticsData.averageViewers,
+            watchTime: analyticsData.watchTime,
+            chatMessages: analyticsData.chatMessages,
+            newFollowers: analyticsData.newFollowers,
+            donations: analyticsData.donations,
+            engagement: analyticsData.engagement,
+            streamHealth: analyticsData.streamHealth,
+            revenue: analyticsData.revenue,
+            subscriptions: analyticsData.subscriptions,
+          })}\n\n`;
+
+          controller.enqueue(encoder.encode(data));
+
+          console.info("[analytics.realtime.stream] update_sent", {
+            streamId,
+            latencyMs: Date.now() - startedAt,
+            freshnessMs: analyticsData.freshnessMs,
+            sources: analyticsData.sources,
+          });
         } catch (error) {
-          console.error("Error sending analytics update:", error)
+          console.error("[analytics.realtime.stream] update_error", {
+            streamId,
+            latencyMs: Date.now() - startedAt,
+            error: error instanceof Error ? error.message : "unknown_error",
+          });
         }
-      }
+      };
 
-      // Send updates every 5 seconds
-      const interval = setInterval(sendUpdate, 5000)
-      sendUpdate() // Send initial data
+      const interval = setInterval(sendUpdate, 5000);
+      sendUpdate();
 
-      // Cleanup on close
       request.signal.addEventListener("abort", () => {
-        clearInterval(interval)
-        controller.close()
-      })
+        clearInterval(interval);
+        controller.close();
+      });
     },
-  })
+  });
 
   return new Response(stream, {
     headers: {
@@ -52,5 +67,5 @@ export async function GET(request: NextRequest) {
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     },
-  })
+  });
 }
