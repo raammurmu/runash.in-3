@@ -7,9 +7,13 @@ import Hero from "@/components/home/hero"
 import ProductCarousel from "@/components/home/products-carousel"
 import AgentCard from "@/components/home/agent-card"
 import CTASection from "@/components/home/cta-section"
+ 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+
+import { Card } from "@/components/ui/card"
+
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -18,6 +22,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
+ 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -40,11 +45,18 @@ import {
   Sidebar,
 } from "lucide-react"
 
+import { Bot, CreditCard, Leaf, PackageSearch, ShieldCheck, ShoppingCart, Sparkles } from "lucide-react"
+
+
 type ChatPreviewMessage = {
   id: string | number
   role: "assistant" | "user"
   content: string
   created_at?: string
+ 
+
+  message_type?: "text" | "product" | "recipe" | "tip" | "automation"
+
 }
 
 type ChatProduct = {
@@ -70,6 +82,7 @@ type ChatQuickPrompt = {
   prompt: string
   icon: React.ComponentType<{ className?: string }>
 }
+ 
 
 type CurrentUser = {
   id: string
@@ -78,6 +91,7 @@ type CurrentUser = {
   email: string | null
   role: string | null
 }
+
 
 export default function RunashChatPage() {
   const router = useRouter()
@@ -88,6 +102,7 @@ export default function RunashChatPage() {
   const [prompt, setPrompt] = useState("")
   const [products, setProducts] = useState<ChatProduct[]>([])
   const [agents, setAgents] = useState<LiveAgent[]>([])
+ 
   const [attachmentName, setAttachmentName] = useState("")
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
   const [productDemoOpen, setProductDemoOpen] = useState(false)
@@ -121,6 +136,32 @@ export default function RunashChatPage() {
     [],
   )
 
+
+  const quickPrompts: ChatQuickPrompt[] = [
+    {
+      id: "bundle",
+      label: "Build Bundle",
+      description: "Create high-conversion bundles with upsells",
+      prompt: "Create a high-converting organic breakfast bundle and suggest two upsells under $30.",
+      icon: ShoppingCart,
+    },
+    {
+      id: "checkout",
+      label: "Checkout Assist",
+      description: "Guide payment and reduce checkout drop-off",
+      prompt: "Act as checkout assistant and help complete a secure payment with cart summary and next steps.",
+      icon: CreditCard,
+    },
+    {
+      id: "order-followup",
+      label: "Post-Purchase",
+      description: "Handle order updates and support questions",
+      prompt: "Handle a post-purchase support request: order tracking, ETA, and return options.",
+      icon: PackageSearch,
+    },
+  ]
+
+
   useEffect(() => {
     if (authStatus !== "authenticated") {
       setLoadingSession(false)
@@ -145,7 +186,12 @@ export default function RunashChatPage() {
           const msgs = await fetch(`/api/messages/session/${data.id}?limit=4`)
           if (msgs.ok) {
             const jl = await msgs.json()
+ 
             setMessagesPreview(Array.isArray(jl) ? (jl as ChatPreviewMessage[]) : [])
+
+            const preview = Array.isArray(jl) ? (jl as ChatPreviewMessage[]) : []
+            setMessagesPreview(preview)
+
           }
         }
       } catch {
@@ -211,6 +257,9 @@ export default function RunashChatPage() {
         }
 
         if (initialPrompt) {
+
+          // store in localStorage so chat page picks it up and sends immediately
+
           const cleanPrompt = initialPrompt.trim()
           if (cleanPrompt) {
             localStorage.setItem("runash_initial_prompt", cleanPrompt)
@@ -224,6 +273,7 @@ export default function RunashChatPage() {
     })()
   }
 
+ 
   useEffect(() => {
     if (authStatus !== "authenticated") return
     if (!sessionId) return
@@ -245,6 +295,23 @@ export default function RunashChatPage() {
     const hours = Math.round(minutes / 60)
     if (hours < 24) return `${hours}h ago`
     return `${Math.round(hours / 24)}d ago`
+
+  const relativeTime = (timestamp?: string) => {
+    if (!timestamp) return "just now"
+
+    const delta = Date.now() - new Date(timestamp).getTime()
+    if (Number.isNaN(delta)) return "just now"
+
+    const minutes = Math.max(Math.round(delta / 60000), 0)
+    if (minutes < 1) return "now"
+    if (minutes < 60) return `${minutes}m ago`
+
+    const hours = Math.round(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+
+    const days = Math.round(hours / 24)
+    return `${days}d ago`
+
   }
 
   return (
@@ -496,7 +563,11 @@ export default function RunashChatPage() {
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <h4 className="font-semibold">Mini Chat Preview</h4>
+ 
                 <div className="text-xs text-gray-500">ChatGPT-style continuity for commerce, profile, and payment journeys.</div>
+
+                <div className="text-xs text-gray-500">ChatGPT-style continuity for commerce and payment journeys.</div>
+
               </div>
               <Badge variant="secondary" className="whitespace-nowrap">
                 {sessionId ? `Session #${sessionId}` : "New session"}
@@ -517,6 +588,7 @@ export default function RunashChatPage() {
             <ScrollArea className="max-h-64 rounded-md border p-3">
               <div className="space-y-2">
                 {loadingSession && <div className="text-sm text-gray-500">Loading preview...</div>}
+ 
                 {!loadingSession && messagesPreview.length === 0 && (
                   <div className="text-sm text-gray-600">No messages yet — start a session to see previews</div>
                 )}
@@ -532,6 +604,18 @@ export default function RunashChatPage() {
                       <span className="text-[11px] text-gray-500">{relativeTime(message.created_at)}</span>
                     </div>
                     <p className="line-clamp-3 text-gray-700 dark:text-gray-300">{message.content}</p>
+
+                {!loadingSession && messagesPreview.length === 0 && <div className="text-sm text-gray-600">No messages yet — start a session to see previews</div>}
+                {messagesPreview.map((m) => (
+                  <div key={m.id} className={`rounded-md border p-2 text-xs ${m.role === "user" ? "bg-orange-50 dark:bg-gray-900" : "bg-white dark:bg-gray-900"}`}>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className={`font-medium ${m.role === "assistant" ? "text-orange-700 dark:text-orange-400" : "text-gray-700 dark:text-gray-200"}`}>
+                        {m.role === "assistant" ? "RunAsh Agent" : "You"}
+                      </span>
+                      <span className="text-[11px] text-gray-500">{relativeTime(m.created_at)}</span>
+                    </div>
+                    <p className="line-clamp-3 text-gray-700 dark:text-gray-300">{m.content}</p>
+
                   </div>
                 ))}
               </div>
@@ -560,6 +644,7 @@ export default function RunashChatPage() {
               </div>
             </div>
 
+ 
             <div className="mt-4 space-y-2">
               <Textarea
                 value={prompt}
@@ -588,6 +673,12 @@ export default function RunashChatPage() {
                     signIn(undefined, { callbackUrl: "/runash-chat" })
                     return
                   }
+
+            <div className="mt-4 flex gap-2">
+              <Input value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Ask the agent something..." />
+              <Button
+                onClick={() => {
+
                   const cleanPrompt = prompt.trim()
                   if (!cleanPrompt) return
                   localStorage.setItem("runash_initial_prompt", cleanPrompt)
@@ -680,8 +771,26 @@ export default function RunashChatPage() {
           </Card>
 
           <Card className="p-4">
+ 
             <h4 className="mb-2 font-semibold">Why RunAsh for Live Commerce?</h4>
             <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+
+            <h4 className="mb-2 font-semibold">Commerce Agent Playbook</h4>
+            <ul className="mb-4 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+              <li className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-green-500" /> Secure handoff for payment and order assistance</li>
+              <li className="flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-orange-500" /> Context-aware product recommendations and bundles</li>
+              <li className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-blue-500" /> Checkout help with guided next actions</li>
+            </ul>
+            <div className="flex gap-2">
+              <Button variant="outline" className="w-full" onClick={() => router.push("/payment/runash-pay")}>Open RunAsh Pay</Button>
+              <Button className="w-full bg-gradient-to-r from-orange-600 to-yellow-500 text-white" onClick={() => startChatWithPrompt("Help me complete checkout with best payment option and order confirmation steps.")}>Launch Agent Flow</Button>
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <h4 className="font-semibold mb-2">Why RunAsh for Live Commerce?</h4>
+            <ul className="text-sm space-y-2 text-gray-700 dark:text-gray-300">
+
               <li>Convert with guided shopping flows</li>
               <li>Reduce returns with live product education</li>
               <li>Boost AOV with context-aware upsells</li>
