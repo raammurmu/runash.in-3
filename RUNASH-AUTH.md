@@ -322,3 +322,36 @@ Once Phase 1 is stable (24+ hours without issues):
 | `GITHUB_CLIENT_ID` | GitHub OAuth | `abc123...` |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth secret | `abc123...` |
 | `MIGRATION_SECRET` | Admin-only operations | `migration_token_xyz` |
+
+ 
+## API Contract Note: Envelope + `/api/v1`
+
+Auth endpoints now support a standardized API envelope for stable external consumption:
+- `success`
+- `data`
+- `error`
+- `requestId`
+- optional `meta`
+
+New integrations should prefer `/api/v1/auth/*` routes where available. Existing `/api/auth/*` routes remain active for backward compatibility and continue to expose legacy fields during migration windows.
+
+For safe client migration:
+1. Prioritize `error.code` and `error.message`.
+2. Use `requestId` for auth incident traceability.
+3. Read canonical payload from `data` and retain legacy fallback parsing until migration completion.
+
+## Agent Chat API Security Guardrails
+
+The versioned backend route `POST /api/v1/agents/chat` enforces authentication for every chat turn before model execution starts.
+
+### Per-turn controls
+- Require an authenticated session (`getServerSession`) and return `401` when missing.
+- Apply per-user/IP rate limits to chat turns (`30` requests per minute window).
+- Validate requested tools against an allow-list and deny unknown tool names.
+- Enforce permission checks for requested tools using RBAC before streaming any response tokens.
+- Return and propagate `x-correlation-id` so client and server logs can be matched safely.
+
+### Logging policy
+- Log turn lifecycle events as structured records: `turn_started`, `turn_completed`, `turn_failed`, and policy rejections.
+- Never log chat message content, auth credentials, or sensitive data; only metadata (counts, IDs, timing, policy outcomes).
+

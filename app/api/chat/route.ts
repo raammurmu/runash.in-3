@@ -1,9 +1,10 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { DatabaseService } from "@/lib/database"
 import { authOptions } from "@/lib/auth"
 import { openai } from "@ai-sdk/openai"
 import { streamText } from "ai"
+import { respondError, respondSuccess } from "@/lib/api/envelope"
 
 export const maxDuration = 30
 
@@ -12,12 +13,15 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions)
 
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return respondError(
+        request,
+        { code: "UNAUTHORIZED", message: "Unauthorized" },
+        { status: 401, legacy: { error: "Unauthorized" } },
+      )
     }
 
     const { messages, context } = await request.json()
 
-    // Add context-aware system prompt based on the chat context
     let systemPrompt = `You are RunAsh AI, a helpful assistant for the RunAsh platform. You help users with live streaming, grocery shopping, and platform features.`
 
     if (context === "grocery") {
@@ -37,7 +41,11 @@ export async function POST(request: NextRequest) {
     return result.toDataStreamResponse()
   } catch (error) {
     console.error("Chat API error:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    return respondError(
+      request,
+      { code: "INTERNAL_ERROR", message: "Internal Server Error" },
+      { status: 500, legacy: { error: "Internal Server Error" } },
+    )
   }
 }
 
@@ -49,17 +57,33 @@ export async function GET(request: NextRequest) {
     const offset = Number.parseInt(searchParams.get("offset") || "0")
 
     if (!streamId) {
-      return NextResponse.json({ error: "Stream ID required" }, { status: 400 })
+      return respondError(
+        request,
+        { code: "STREAM_ID_REQUIRED", message: "Stream ID required" },
+        { status: 400, legacy: { error: "Stream ID required" } },
+      )
     }
 
     const messages = await DatabaseService.getChatMessages(streamId, limit, offset)
 
-    return NextResponse.json({
-      success: true,
-      messages,
-    })
+    return respondSuccess(
+      request,
+      {
+        messages,
+      },
+      {
+        legacy: {
+          success: true,
+          messages,
+        },
+      },
+    )
   } catch (error) {
     console.error("Get chat messages error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return respondError(
+      request,
+      { code: "INTERNAL_ERROR", message: "Internal server error" },
+      { status: 500, legacy: { error: "Internal server error" } },
+    )
   }
 }
