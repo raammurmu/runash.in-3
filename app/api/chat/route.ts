@@ -1,11 +1,15 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { DatabaseService } from "@/lib/database"
 import { authOptions } from "@/lib/auth"
 import { openai } from "@ai-sdk/openai"
 import { streamText } from "ai"
+ 
 import { enforceDualQuota } from "@/lib/route-quota"
 import { generateCorrelationId, logEvent, serializeError, withRequestContext } from "@/lib/observability"
+
+import { respondError, respondSuccess } from "@/lib/api/envelope"
+
 
 export const maxDuration = 30
 
@@ -13,15 +17,26 @@ export async function POST(request: NextRequest): Promise<Response> {
   const correlationId = request.headers.get("x-correlation-id") || generateCorrelationId()
   const requestId = request.headers.get("x-request-id") || generateCorrelationId()
 
+ 
   return withRequestContext({ correlationId, requestId, route: "/api/chat" }, async () => {
     try {
       const session = await getServerSession(authOptions)
+
+    if (!session?.user?.id) {
+      return respondError(
+        request,
+        { code: "UNAUTHORIZED", message: "Unauthorized" },
+        { status: 401, legacy: { error: "Unauthorized" } },
+      )
+    }
+
 
       if (!session?.user?.id) {
         logEvent("warn", "Unauthorized chat request")
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       }
 
+ 
       const quotaResult = enforceDualQuota(request, "chat", {
         perIpLimit: 120,
         perUserLimit: 90,
@@ -29,11 +44,15 @@ export async function POST(request: NextRequest): Promise<Response> {
         userId: session.user.id,
       })
 
+    let systemPrompt = `You are RunAsh AI, a helpful assistant for the RunAsh platform. You help users with live streaming, grocery shopping, and platform features.`
+
+
       if (!quotaResult.allowed) {
         logEvent("warn", "Chat quota exceeded", { userId: session.user.id, resetAt: quotaResult.resetAt })
         return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 })
       }
 
+ 
       const { messages, context } = await request.json()
 
       let systemPrompt = `You are RunAsh AI, a helpful assistant for the RunAsh platform. You help users with live streaming, grocery shopping, and platform features.`
@@ -50,6 +69,26 @@ export async function POST(request: NextRequest): Promise<Response> {
         userId: session.user.id,
       })
 
+    const result = streamText({
+      model: openai("gpt-4-turbo"),
+      system: systemPrompt,
+      messages,
+      temperature: 0.7,
+      maxTokens: 1000,
+    })
+
+    return result.toDataStreamResponse()
+  } catch (error) {
+    console.error("Chat API error:", error)
+    return respondError(
+      request,
+      { code: "INTERNAL_ERROR", message: "Internal Server Error" },
+      { status: 500, legacy: { error: "Internal Server Error" } },
+    )
+  }
+}
+
+
       const result = streamText({
         model: openai("gpt-4-turbo"),
         system: systemPrompt,
@@ -57,6 +96,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         temperature: 0.7,
         maxTokens: 1000,
       })
+
 
       return result.toDataStreamResponse({
         headers: {
@@ -67,6 +107,14 @@ export async function POST(request: NextRequest): Promise<Response> {
     } catch (error) {
       logEvent("error", "Chat API error", { error: serializeError(error) })
       return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+
+    if (!streamId) {
+      return respondError(
+        request,
+        { code: "STREAM_ID_REQUIRED", message: "Stream ID required" },
+        { status: 400, legacy: { error: "Stream ID required" } },
+      )
+
     }
   })
 }
@@ -86,6 +134,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         return NextResponse.json({ error: "Stream ID required" }, { status: 400 })
       }
 
+ 
       const messages = await DatabaseService.getChatMessages(streamId, limit, offset)
 
       return NextResponse.json(
@@ -105,4 +154,26 @@ export async function GET(request: NextRequest): Promise<Response> {
       return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
   })
+
+    return respondSuccess(
+      request,
+      {
+        messages,
+      },
+      {
+        legacy: {
+          success: true,
+          messages,
+        },
+      },
+    )
+  } catch (error) {
+    console.error("Get chat messages error:", error)
+    return respondError(
+      request,
+      { code: "INTERNAL_ERROR", message: "Internal server error" },
+      { status: 500, legacy: { error: "Internal server error" } },
+    )
+  }
+
 }

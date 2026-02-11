@@ -389,3 +389,51 @@ POST /api/ecommerce/notifications     # Create notification
    - Global currency support
    - Multi-language interface
    - CDN for media delivery
+
+## API Envelope Standardization & `/api/v1` Compatibility (2026 update)
+
+RunAsh now provides a shared response envelope for stabilized external API contracts:
+
+```json
+{
+  "success": true,
+  "data": { "...": "payload" },
+  "error": null,
+  "requestId": "req_...",
+  "meta": { "...": "optional" }
+}
+```
+
+For failures:
+
+```json
+{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human readable message",
+    "details": { "...": "optional" }
+  },
+  "requestId": "req_..."
+}
+```
+
+### Stabilized namespace
+
+New stabilized routes are available under `/api/v1` for high-impact domains:
+- `/api/v1/auth/register`
+- `/api/v1/payment/create-intent`
+- `/api/v1/seller/settings`
+- `/api/v1/chat`
+- `/api/v1/analytics`
+
+### Backward compatibility behavior
+
+Legacy routes remain available at their current non-versioned paths. During migration, legacy response fields remain present for compatibility while clients can adopt envelope fields (`success`, `data`, `error`, `requestId`) incrementally.
+
+Migration guidance:
+1. Prefer `/api/v1/*` for new integrations.
+2. Read `requestId` for end-to-end tracing.
+3. Use `error.code` for programmatic handling instead of brittle message matching.
+4. Move payload reads to `data` while keeping legacy field fallbacks during rollout.
