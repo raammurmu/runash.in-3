@@ -28,7 +28,7 @@ export default function SyncStatusComponent({ className }: SyncStatusProps) {
 
   const handleForceSync = async () => {
     const sync = BackgroundSync.getInstance()
-    await sync.forcSync()
+    await sync.forceSync()
   }
 
   const getStatusIcon = () => {

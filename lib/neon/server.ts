@@ -1,7 +1,13 @@
+import "server-only"
 import { createServerClient } from "@neon/ssr"
 import { cookies } from "next/headers"
 import type { Database } from "./types"
 
+/**
+ * Server-only Neon client bound to Next.js request cookies.
+ *
+ * Use this in Route Handlers, Server Components, and other server execution paths.
+ */
 export function createServerNeonClient() {
   const cookieStore = cookies()
 

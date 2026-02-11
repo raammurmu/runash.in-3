@@ -1,7 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { neon } from "@neondatabase/serverless"
+import { respondError, respondSuccess } from "@/lib/api/envelope"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -9,12 +10,15 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return respondError(
+        req,
+        { code: "UNAUTHORIZED", message: "Unauthorized" },
+        { status: 401, legacy: { error: "Unauthorized" } },
+      )
     }
 
     const { searchParams } = new URL(req.url)
     const period = searchParams.get("period") || "7d"
-    const streamId = searchParams.get("streamId")
 
     let dateFilter = ""
     switch (period) {
@@ -31,7 +35,6 @@ export async function GET(req: NextRequest) {
         dateFilter = "created_at >= NOW() - INTERVAL '7 days'"
     }
 
-    // Get stream analytics
     const streamAnalytics = await sql`
       SELECT 
         COUNT(*) as total_streams,
@@ -43,7 +46,6 @@ export async function GET(req: NextRequest) {
       AND ${sql.unsafe(dateFilter)}
     `
 
-    // Get chat analytics
     const chatAnalytics = await sql`
       SELECT 
         COUNT(*) as total_messages,
@@ -56,7 +58,6 @@ export async function GET(req: NextRequest) {
       AND cm.${sql.unsafe(dateFilter)}
     `
 
-    // Get recording analytics
     const recordingAnalytics = await sql`
       SELECT 
         COUNT(*) as total_recordings,
@@ -69,7 +70,6 @@ export async function GET(req: NextRequest) {
       AND r.${sql.unsafe(dateFilter)}
     `
 
-    // Get daily breakdown
     const dailyBreakdown = await sql`
       SELECT 
         DATE(created_at) as date,
@@ -82,14 +82,20 @@ export async function GET(req: NextRequest) {
       ORDER BY date DESC
     `
 
-    return NextResponse.json({
+    const analyticsPayload = {
       streams: streamAnalytics[0],
       chat: chatAnalytics[0],
       recordings: recordingAnalytics[0],
       daily: dailyBreakdown,
-    })
+    }
+
+    return respondSuccess(req, analyticsPayload, { legacy: analyticsPayload })
   } catch (error) {
     console.error("Analytics error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return respondError(
+      req,
+      { code: "INTERNAL_ERROR", message: "Internal server error" },
+      { status: 500, legacy: { error: "Internal server error" } },
+    )
   }
 }

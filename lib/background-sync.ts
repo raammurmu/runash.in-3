@@ -190,8 +190,14 @@ export class BackgroundSync {
     this.statusListeners.forEach((listener) => listener(status))
   }
 
-  public forcSync(): Promise<void> {
+  public forceSync(): Promise<void> {
     return this.processSyncQueue()
+  }
+
+  // Deprecated alias for backward compatibility; prefer forceSync().
+  // TODO: Remove forcSync() in a future cleanup after callsites migrate.
+  public forcSync(): Promise<void> {
+    return this.forceSync()
   }
 
   public clearQueue(): void {

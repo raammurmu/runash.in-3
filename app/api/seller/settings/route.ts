@@ -1,5 +1,6 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest } from "next/server"
 import { getSql } from "@/lib/db/neon"
+import { respondError, respondSuccess } from "@/lib/api/envelope"
 
 type SellerSettingsPayload = {
   businessName?: string
@@ -41,10 +42,14 @@ export async function GET(request: NextRequest) {
     `
 
     if (!row) {
-      return NextResponse.json({ error: "Seller not found" }, { status: 404 })
+      return respondError(
+        request,
+        { code: "SELLER_NOT_FOUND", message: "Seller not found" },
+        { status: 404, legacy: { error: "Seller not found" } },
+      )
     }
 
-    let parsedBio: Record<string, any> = {}
+    let parsedBio: Record<string, unknown> = {}
     if (row.bio) {
       try {
         parsedBio = typeof row.bio === "string" ? JSON.parse(row.bio) : row.bio
@@ -53,15 +58,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const sellerSettings =
+      parsedBio && typeof parsedBio === "object" && "sellerSettings" in parsedBio
+        ? (parsedBio.sellerSettings as SellerSettingsPayload)
+        : undefined
+
     const settings = {
       ...defaultSettings,
-      ...(parsedBio?.sellerSettings || {}),
-      businessName: parsedBio?.sellerSettings?.businessName || row.name || defaultSettings.businessName,
+      ...(sellerSettings || {}),
+      businessName: sellerSettings?.businessName || row.name || defaultSettings.businessName,
     }
 
-    return NextResponse.json(settings)
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to load seller settings" }, { status: 500 })
+    return respondSuccess(request, settings, { legacy: settings })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to load seller settings"
+    return respondError(
+      request,
+      { code: "SELLER_SETTINGS_READ_FAILED", message },
+      { status: 500, legacy: { error: message } },
+    )
   }
 }
 
@@ -80,10 +95,14 @@ export async function PUT(request: NextRequest) {
     `
 
     if (!row) {
-      return NextResponse.json({ error: "Seller not found" }, { status: 404 })
+      return respondError(
+        request,
+        { code: "SELLER_NOT_FOUND", message: "Seller not found" },
+        { status: 404, legacy: { error: "Seller not found" } },
+      )
     }
 
-    let parsedBio: Record<string, any> = {}
+    let parsedBio: Record<string, unknown> = {}
     if (row.bio) {
       try {
         parsedBio = typeof row.bio === "string" ? JSON.parse(row.bio) : row.bio
@@ -92,9 +111,14 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    const sellerSettings =
+      parsedBio && typeof parsedBio === "object" && "sellerSettings" in parsedBio
+        ? (parsedBio.sellerSettings as SellerSettingsPayload)
+        : undefined
+
     const mergedSettings = {
       ...defaultSettings,
-      ...(parsedBio?.sellerSettings || {}),
+      ...(sellerSettings || {}),
       ...payload,
     }
 
@@ -112,11 +136,20 @@ export async function PUT(request: NextRequest) {
     `
 
     if (!updated) {
-      return NextResponse.json({ error: "Unable to update seller settings" }, { status: 500 })
+      return respondError(
+        request,
+        { code: "SELLER_SETTINGS_UPDATE_FAILED", message: "Unable to update seller settings" },
+        { status: 500, legacy: { error: "Unable to update seller settings" } },
+      )
     }
 
-    return NextResponse.json(mergedSettings)
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to update seller settings" }, { status: 500 })
+    return respondSuccess(request, mergedSettings, { legacy: mergedSettings })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update seller settings"
+    return respondError(
+      request,
+      { code: "SELLER_SETTINGS_UPDATE_FAILED", message },
+      { status: 500, legacy: { error: message } },
+    )
   }
 }

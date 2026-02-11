@@ -1,9 +1,10 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest } from "next/server"
 import { createUser, generateEmailVerificationToken } from "@/lib/auth-utils"
 import { neon } from "@neondatabase/serverless"
 import { registerSchema } from "@/lib/validations/auth"
 import { rateLimit } from "@/lib/rate-limit"
 import { sendVerificationEmail } from "@/lib/email"
+import { respondError, respondSuccess } from "@/lib/api/envelope"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -11,19 +12,34 @@ export async function POST(request: NextRequest) {
   try {
     const rateLimitResult = await rateLimit(request, "register", 5, 900) // 5 attempts per 15 minutes
     if (!rateLimitResult.success) {
-      return NextResponse.json({ message: "Too many registration attempts. Please try again later." }, { status: 429 })
+      return respondError(
+        request,
+        {
+          code: "RATE_LIMITED",
+          message: "Too many registration attempts. Please try again later.",
+        },
+        { status: 429, legacy: { message: "Too many registration attempts. Please try again later." } },
+      )
     }
 
     const body = await request.json()
 
     const validationResult = registerSchema.safeParse(body)
     if (!validationResult.success) {
-      return NextResponse.json(
+      return respondError(
+        request,
         {
+          code: "VALIDATION_FAILED",
           message: "Validation failed",
-          errors: validationResult.error.flatten().fieldErrors,
+          details: validationResult.error.flatten().fieldErrors,
         },
-        { status: 400 },
+        {
+          status: 400,
+          legacy: {
+            message: "Validation failed",
+            errors: validationResult.error.flatten().fieldErrors,
+          },
+        },
       )
     }
 
@@ -36,7 +52,15 @@ export async function POST(request: NextRequest) {
 
     if (existingUser) {
       const conflictField = existingUser.email === email ? "email" : "username"
-      return NextResponse.json({ message: `User with this ${conflictField} already exists` }, { status: 409 })
+      return respondError(
+        request,
+        {
+          code: "USER_EXISTS",
+          message: `User with this ${conflictField} already exists`,
+          details: { field: conflictField },
+        },
+        { status: 409, legacy: { message: `User with this ${conflictField} already exists` } },
+      )
     }
 
     const user = await createUser({
@@ -50,21 +74,34 @@ export async function POST(request: NextRequest) {
     const verificationToken = await generateEmailVerificationToken(user.id)
     await sendVerificationEmail(email, name, verificationToken)
 
-    return NextResponse.json(
+    const createdUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      username: user.username,
+      emailVerified: false,
+    }
+
+    return respondSuccess(
+      request,
       {
         message: "User created successfully. Please check your email to verify your account.",
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          username: user.username,
-          emailVerified: false,
+        user: createdUser,
+      },
+      {
+        status: 201,
+        legacy: {
+          message: "User created successfully. Please check your email to verify your account.",
+          user: createdUser,
         },
       },
-      { status: 201 },
     )
   } catch (error) {
     console.error("Registration error:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    return respondError(
+      request,
+      { code: "INTERNAL_ERROR", message: "Internal server error" },
+      { status: 500, legacy: { message: "Internal server error" } },
+    )
   }
 }

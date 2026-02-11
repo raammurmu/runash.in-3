@@ -119,6 +119,7 @@ Please see `CONTRIBUTING.md` for guidelines on adding new Agent Skills or UI com
 
 ```
 
+ 
 ---
 
 ## Reliability Controls for Payment/Order/Agent Mutations
@@ -152,3 +153,22 @@ Please see `CONTRIBUTING.md` for guidelines on adding new Agent Skills or UI com
 4. Replay only verified dead-letter jobs with documented job IDs and operator approval.
 5. Validate ledger/order parity before unfreezing endpoints.
 6. Publish incident summary with blast radius, reconciliations, and prevention actions.
+
+## API Reliability Update: Stable Envelope and `/api/v1`
+
+Payment APIs are being standardized around a shared response envelope:
+
+- `success`
+- `data`
+- `error`
+- `requestId`
+- optional `meta`
+
+The stabilized payment contract is exposed under `/api/v1/payment/*` where supported (for example: `/api/v1/payment/create-intent`). Existing `/api/payment/*` routes remain available for compatibility.
+
+### Migration guidance
+- Prefer `/api/v1` routes for all new client/server integrations.
+- Use `requestId` for reconciliation and support diagnostics.
+- Use `error.code` for deterministic retry/UX logic.
+- Continue accepting legacy fields during transition; remove fallbacks only after rollout verification.
+
