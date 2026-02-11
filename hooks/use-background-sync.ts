@@ -26,7 +26,7 @@ export function useBackgroundSync() {
 
   const forceSync = useCallback(async () => {
     const sync = BackgroundSync.getInstance()
-    await sync.forcSync()
+    await sync.forceSync()
   }, [])
 
   const clearQueue = useCallback(() => {
