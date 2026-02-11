@@ -240,6 +240,42 @@
 
 ---
 
+## 9) Delivered Scope Update (Current Iteration)
+
+### Delivered in code
+- Added versioned agent endpoints:
+  - `POST /api/v1/agents/chat` (SSE stream)
+  - `GET /api/v1/agents/sessions/:id`
+  - `POST /api/v1/agents/actions`
+  - `POST /api/v1/agents/feedback`
+- Added compatibility adapters for migration continuity:
+  - `POST /api/agents/chat`
+  - `GET /api/agents/sessions/:id`
+- Added normalized persistence schema migration for:
+  - `agent_sessions`, `agent_messages`, `agent_tool_calls`, `agent_tool_results`, `agent_action_logs`, `agent_feedback`
+- Added server-side orchestration baseline including:
+  - session state transitions (`queued`, `streaming`, `tool-running`, `completed`, `failed`)
+  - tool routing with retries, timeout budget, and short-lived caching
+  - prompt-injection checks and sensitive-action confirmation gates
+- Updated editor-side AI chat panel UX with:
+  - explicit session status badges
+  - collapsible tool activity timeline
+  - explicit user confirmation control for sensitive requests
+
+### Validation and release notes
+- Changes are additive and backward-compatible by default.
+- Existing unversioned chat/session paths are not removed.
+- Schema rollout is migration-safe (create-only tables + indexes); rollback guidance is embedded in migration SQL comments.
+
+### Next milestones
+1. Replace mock orchestrator response generation with provider-backed model routing.
+2. Add queue worker execution for long-running tools and delayed actions.
+3. Add integration and E2E coverage for `/api/v1/agents/*` critical paths.
+4. Add feature flags + canary cohorts for controlled rollout.
+5. Add tenant-aware adaptive throttling and quota policy storage.
+
+---
+
 ## 8) Inline Comment Resolution: Step-by-Step Implementation Work Packages
 
 No explicit inline review comment thread was included in the task payload. To address the request for actionable implementation guidance, the four identified issues are converted into assignable execution stubs below.

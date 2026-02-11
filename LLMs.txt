@@ -50,7 +50,8 @@ RunAsh AI - LLM Integration Notes
 - Main integration surfaces:
   - API routes under app/api
   - Service logic under services and lib/services
-  - Agentic features under lib/agentic-protocol.ts and related UI/components
+  - Agentic features under `app/api/v1/agents/*`, `lib/agents-*`, and related UI/components
+  - Compatibility adapters under `app/api/agents/*` during migration windows
 - Before introducing new model providers or prompts:
   - document configuration in README and relevant guide
   - avoid hardcoding provider secrets
@@ -88,5 +89,4 @@ Documentation sync:
 Contribution style:
 - Prefer minimal, reversible changes.
 - Include validation commands and clear summary.
-
 

@@ -1,21 +1,35 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Send, Sparkles, Loader, Copy, Trash2 } from "lucide-react"
+import { Send, Sparkles, Loader, Copy, Trash2, ChevronDown, ShieldAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+
+type SessionStatus = "queued" | "streaming" | "tool-running" | "completed" | "failed"
+
+interface TimelineEvent {
+  id: string
+  type: "tool_start" | "tool_result" | "notice"
+  label: string
+  timestamp: Date
+}
 
 interface Message {
   id: string
   role: "user" | "assistant"
   content: string
   timestamp: Date
-  isLoading?: boolean
+  status?: SessionStatus
+  timeline?: TimelineEvent[]
 }
 
 interface AIChatPanelProps {
   isOpen: boolean
 }
+
+const HIGH_RISK_KEYWORDS = /(payment|account|external send|refund|checkout)/i
 
 export default function AIChatPanel({ isOpen }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
@@ -24,10 +38,14 @@ export default function AIChatPanel({ isOpen }: AIChatPanelProps) {
       role: "assistant",
       content: "Hi! I'm your AI assistant. How can I help you with your video today?",
       timestamp: new Date(Date.now() - 5000),
+      status: "completed",
     },
   ])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("completed")
+  const [confirmSensitiveActions, setConfirmSensitiveActions] = useState(true)
+  const [pendingSensitivePrompt, setPendingSensitivePrompt] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -35,6 +53,34 @@ export default function AIChatPanel({ isOpen }: AIChatPanelProps) {
       scrollRef.current.scrollIntoView({ behavior: "smooth" })
     }
   }, [messages])
+
+  const runAssistantFlow = (userInput: string) => {
+    setSessionStatus("queued")
+    setIsLoading(true)
+
+    const timeline: TimelineEvent[] = [
+      { id: "t1", type: "notice", label: "Request queued", timestamp: new Date() },
+      { id: "t2", type: "tool_start", label: "Running context lookup", timestamp: new Date(Date.now() + 200) },
+      { id: "t3", type: "tool_result", label: "Context lookup complete", timestamp: new Date(Date.now() + 350) },
+    ]
+
+    setTimeout(() => setSessionStatus("streaming"), 150)
+    setTimeout(() => setSessionStatus("tool-running"), 350)
+
+    setTimeout(() => {
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: generateAIResponse(userInput),
+        timestamp: new Date(),
+        status: "completed",
+        timeline,
+      }
+      setMessages((prev) => [...prev, aiResponse])
+      setSessionStatus("completed")
+      setIsLoading(false)
+    }, 900)
+  }
 
   const handleSendMessage = async () => {
     if (!input.trim()) return
@@ -44,23 +90,22 @@ export default function AIChatPanel({ isOpen }: AIChatPanelProps) {
       role: "user",
       content: input,
       timestamp: new Date(),
+      status: "completed",
     }
 
     setMessages((prev) => [...prev, userMessage])
-    setInput("")
-    setIsLoading(true)
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: generateAIResponse(input),
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, aiResponse])
-      setIsLoading(false)
-    }, 1000)
+    const isSensitive = HIGH_RISK_KEYWORDS.test(input)
+    const currentInput = input
+    setInput("")
+
+    if (isSensitive && confirmSensitiveActions) {
+      setPendingSensitivePrompt(currentInput)
+      setSessionStatus("queued")
+      return
+    }
+
+    runAssistantFlow(currentInput)
   }
 
   const generateAIResponse = (userInput: string): string => {
@@ -88,28 +133,44 @@ export default function AIChatPanel({ isOpen }: AIChatPanelProps) {
         role: "assistant",
         content: "Chat cleared. How can I help you?",
         timestamp: new Date(),
+        status: "completed",
       },
     ])
+    setSessionStatus("completed")
+    setPendingSensitivePrompt(null)
+  }
+
+  const statusBadgeVariant: Record<SessionStatus, "default" | "secondary" | "destructive" | "outline"> = {
+    queued: "outline",
+    streaming: "secondary",
+    "tool-running": "secondary",
+    completed: "default",
+    failed: "destructive",
   }
 
   if (!isOpen) return null
 
   return (
     <div className="w-80 bg-card border-l border-border flex flex-col h-full overflow-hidden">
-      {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-primary-foreground" />
           </div>
-          <h3 className="font-semibold text-foreground">AI Assistant</h3>
+          <div>
+            <h3 className="font-semibold text-foreground">AI Assistant</h3>
+            <div className="mt-1">
+              <Badge variant={statusBadgeVariant[sessionStatus]} className="text-[10px] capitalize">
+                {sessionStatus}
+              </Badge>
+            </div>
+          </div>
         </div>
         <Button variant="ghost" size="sm" onClick={handleClearChat} title="Clear chat">
           <Trash2 className="w-4 h-4" />
         </Button>
       </div>
 
-      {/* Messages area */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
           {messages.map((message) => (
@@ -143,17 +204,61 @@ export default function AIChatPanel({ isOpen }: AIChatPanelProps) {
                     </button>
                   )}
                 </div>
+
+                {message.timeline && message.timeline.length > 0 && (
+                  <Collapsible className="mt-2 border-t border-border/60 pt-2">
+                    <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                      <ChevronDown className="h-3 w-3" />
+                      Tool activity timeline
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2 space-y-1">
+                      {message.timeline.map((event) => (
+                        <div key={event.id} className="text-xs text-muted-foreground flex justify-between gap-2">
+                          <span>{event.label}</span>
+                          <span>{event.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
               </div>
             </div>
           ))}
 
-          {/* Loading indicator */}
+          {pendingSensitivePrompt && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="h-4 w-4 text-amber-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">Confirmation required</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This request may perform a sensitive action. Confirm before execution.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        runAssistantFlow(pendingSensitivePrompt)
+                        setPendingSensitivePrompt(null)
+                      }}
+                    >
+                      Confirm
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setPendingSensitivePrompt(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isLoading && (
             <div className="flex justify-start">
               <div className="bg-muted rounded-lg rounded-bl-none px-4 py-2 border border-border">
                 <div className="flex items-center gap-2">
                   <Loader className="w-4 h-4 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">AI is thinking...</span>
+                  <span className="text-sm text-muted-foreground">AI is processing…</span>
                 </div>
               </div>
             </div>
@@ -161,7 +266,6 @@ export default function AIChatPanel({ isOpen }: AIChatPanelProps) {
         </div>
       </ScrollArea>
 
-      {/* Input area */}
       <div className="border-t border-border p-4 space-y-2">
         <div className="flex gap-2">
           <input
@@ -181,7 +285,15 @@ export default function AIChatPanel({ isOpen }: AIChatPanelProps) {
             <Send className="w-4 h-4" />
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">Press Enter to send • Shift+Enter for new line</p>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={confirmSensitiveActions}
+            onChange={(e) => setConfirmSensitiveActions(e.target.checked)}
+            className="h-3 w-3"
+          />
+          Require explicit confirmation for sensitive actions
+        </label>
       </div>
     </div>
   )
