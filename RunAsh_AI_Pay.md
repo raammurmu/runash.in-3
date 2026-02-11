@@ -119,8 +119,28 @@ Please see `CONTRIBUTING.md` for guidelines on adding new Agent Skills or UI com
 
 ```
 
+ 
 ## Reliability controls update (2026)
 
 - Payment initiation and checkout endpoints now enforce dual quotas (IP/user) to mitigate abuse while preserving existing contracts.
 - Billing webhook processing now blocks replayed events and rejects invalid/missing signatures before processing.
 - Correlation IDs are now attached to payment API flows and service-layer payment logs for auditability.
+
+## API Reliability Update: Stable Envelope and `/api/v1`
+
+Payment APIs are being standardized around a shared response envelope:
+
+- `success`
+- `data`
+- `error`
+- `requestId`
+- optional `meta`
+
+The stabilized payment contract is exposed under `/api/v1/payment/*` where supported (for example: `/api/v1/payment/create-intent`). Existing `/api/payment/*` routes remain available for compatibility.
+
+### Migration guidance
+- Prefer `/api/v1` routes for all new client/server integrations.
+- Use `requestId` for reconciliation and support diagnostics.
+- Use `error.code` for deterministic retry/UX logic.
+- Continue accepting legacy fields during transition; remove fallbacks only after rollout verification.
+
