@@ -1,4 +1,5 @@
 import crypto from "crypto"
+import { executeWithRetry } from "@/lib/resilience"
 
 export interface PayConfig {
   merchantKey: string
@@ -51,14 +52,25 @@ export class PayGateway {
       }
 
       // In a real implementation, you would make an HTTP request to PayU API
-      const response = await fetch(`${this.config.baseUrl}/payment/op/v1/createPaymentRequest`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.config.merchantKey}`,
+      const response = await executeWithRetry(
+        async () =>
+          fetch(`${this.config.baseUrl}/payment/op/v1/createPaymentRequest`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${this.config.merchantKey}`,
+            },
+            body: JSON.stringify(paymentData),
+          }),
+        {
+          maxAttempts: 3,
+          baseDelayMs: 300,
+          maxDelayMs: 1500,
+          jitterRatio: 0.2,
+          timeoutMs: 5000,
+          isRetryableError: () => true,
         },
-        body: JSON.stringify(paymentData),
-      })
+      )
 
       const result = await response.json()
 
@@ -126,17 +138,28 @@ export class PayGateway {
 
   async getPaymentStatus(paymentId: string) {
     try {
-      const response = await fetch(`${this.config.baseUrl}/payment/op/v1/getPaymentStatus`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.config.merchantKey}`,
+      const response = await executeWithRetry(
+        async () =>
+          fetch(`${this.config.baseUrl}/payment/op/v1/getPaymentStatus`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${this.config.merchantKey}`,
+            },
+            body: JSON.stringify({
+              merchantKey: this.config.merchantKey,
+              paymentId: paymentId,
+            }),
+          }),
+        {
+          maxAttempts: 3,
+          baseDelayMs: 300,
+          maxDelayMs: 1500,
+          jitterRatio: 0.2,
+          timeoutMs: 5000,
+          isRetryableError: () => true,
         },
-        body: JSON.stringify({
-          merchantKey: this.config.merchantKey,
-          paymentId: paymentId,
-        }),
-      })
+      )
 
       const result = await response.json()
 
