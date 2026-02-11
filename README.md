@@ -62,6 +62,9 @@ Open `http://localhost:3000`.
 - **Service and integration layer**
   - `services/` and `lib/services/` contain orchestration and business logic.
   - `lib/auth/`, `lib/workflow/`, and integration-specific modules support platform capabilities.
+- **Background sync API (frontend developer note)**
+  - `BackgroundSync.forceSync()` is the canonical method to manually flush pending sync queue items.
+  - `BackgroundSync.forcSync()` remains as a temporary deprecated alias for backward compatibility and will be removed in a future cleanup.
 - **Data and model layer**
   - `lib/db/`, `lib/repositories/`, and `lib/data/` contain database access and domain modeling.
   - See `DRIZZLE_ORM.md` for ORM and schema conventions.
