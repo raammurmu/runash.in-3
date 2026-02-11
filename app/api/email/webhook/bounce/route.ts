@@ -1,46 +1,70 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { EmailBounceHandler } from "@/lib/email-bounce-handler"
+import { checkReplay, ensureTimestampWithinTolerance, verifyHmacSignature } from "@/lib/webhook-security"
+import { generateCorrelationId, logEvent, serializeError, withRequestContext } from "@/lib/observability"
 
-// Webhook endpoint for processing bounce notifications from email service providers
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
+  const correlationId = request.headers.get("x-correlation-id") || generateCorrelationId()
+  const requestId = request.headers.get("x-request-id") || generateCorrelationId()
 
-    // Handle different webhook formats (AWS SES, SendGrid, Mailgun, etc.)
-    const bounceEvents = await parseBounceWebhook(body, request.headers)
+  return withRequestContext({ correlationId, requestId, route: "/api/email/webhook/bounce" }, async () => {
+    try {
+      const rawBody = await request.text()
+      const signingSecret = process.env.EMAIL_WEBHOOK_SIGNING_SECRET
+      const signature = request.headers.get("x-webhook-signature")
+      const timestamp = request.headers.get("x-webhook-timestamp")
+      const webhookId = request.headers.get("x-webhook-id") || request.headers.get("x-event-id")
 
-    let processed = 0
-    let errors = 0
+      if (signingSecret) {
+        if (!ensureTimestampWithinTolerance(timestamp)) {
+          return NextResponse.json({ error: "Webhook timestamp is outside tolerance" }, { status: 400 })
+        }
 
-    for (const bounceEvent of bounceEvents) {
-      try {
-        const success = await EmailBounceHandler.processBounce(bounceEvent)
-        if (success) {
-          processed++
-        } else {
+        if (!verifyHmacSignature(rawBody, signingSecret, signature)) {
+          return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 })
+        }
+      }
+
+      if (webhookId && !checkReplay(webhookId)) {
+        return NextResponse.json({ error: "Duplicate webhook delivery" }, { status: 409 })
+      }
+
+      const body = JSON.parse(rawBody)
+      const bounceEvents = await parseBounceWebhook(body)
+
+      let processed = 0
+      let errors = 0
+
+      for (const bounceEvent of bounceEvents) {
+        try {
+          const success = await EmailBounceHandler.processBounce(bounceEvent)
+          if (success) {
+            processed++
+          } else {
+            errors++
+          }
+        } catch (error) {
+          logEvent("error", "Error processing bounce event", { error: serializeError(error) })
           errors++
         }
-      } catch (error) {
-        console.error("Error processing bounce event:", error)
-        errors++
       }
-    }
 
-    return NextResponse.json({
-      success: true,
-      processed,
-      errors,
-    })
-  } catch (error) {
-    console.error("Error processing bounce webhook:", error)
-    return NextResponse.json({ error: "Failed to process bounce webhook" }, { status: 500 })
-  }
+      logEvent("info", "Bounce webhook processed", { processed, errors, eventCount: bounceEvents.length })
+
+      return NextResponse.json({
+        success: true,
+        processed,
+        errors,
+      })
+    } catch (error) {
+      logEvent("error", "Error processing bounce webhook", { error: serializeError(error) })
+      return NextResponse.json({ error: "Failed to process bounce webhook" }, { status: 500 })
+    }
+  })
 }
 
-// Parse bounce webhook from different providers
 async function parseBounceWebhook(
   body: any,
-  headers: Headers,
 ): Promise<
   Array<{
     message_id: string
@@ -55,7 +79,6 @@ async function parseBounceWebhook(
 > {
   const events: any[] = []
 
-  // AWS SES format
   if (body.Type === "Notification" && body.Message) {
     const message = JSON.parse(body.Message)
 
@@ -85,10 +108,7 @@ async function parseBounceWebhook(
         })
       }
     }
-  }
-
-  // SendGrid format
-  else if (Array.isArray(body)) {
+  } else if (Array.isArray(body)) {
     for (const event of body) {
       if (event.event === "bounce" || event.event === "dropped") {
         events.push({
@@ -110,10 +130,7 @@ async function parseBounceWebhook(
         })
       }
     }
-  }
-
-  // Mailgun format
-  else if (body["event-data"]) {
+  } else if (body["event-data"]) {
     const eventData = body["event-data"]
     if (eventData.event === "failed" || eventData.event === "complained") {
       events.push({
@@ -127,10 +144,7 @@ async function parseBounceWebhook(
         raw_data: eventData,
       })
     }
-  }
-
-  // Generic format fallback
-  else if (body.email && body.event) {
+  } else if (body.email && body.event) {
     events.push({
       message_id: body.message_id || `unknown_${Date.now()}`,
       recipient_email: body.email,

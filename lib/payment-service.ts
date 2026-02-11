@@ -1,3 +1,5 @@
+import { getCorrelationId, logEvent } from "@/lib/observability"
+
 export interface PaymentMethod {
   id: string
   name: string
@@ -173,6 +175,14 @@ export class PaymentService {
       updatedAt: new Date(),
     }
 
+    logEvent("info", "Payment intent initialized", {
+      intentId: intent.id,
+      amount,
+      currency,
+      paymentMethodId,
+      correlationId: getCorrelationId(),
+    })
+
     return intent
   }
 
@@ -204,6 +214,15 @@ export class PaymentService {
     }
 
     this.transactions.push(transaction)
+
+    logEvent("info", "Payment transaction processed", {
+      transactionId: transaction.id,
+      intentId,
+      status: transaction.status,
+      provider: transaction.provider,
+      correlationId: getCorrelationId(),
+    })
+
     return transaction
   }
 

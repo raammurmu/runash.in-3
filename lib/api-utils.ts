@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { getSql } from "@/lib/db/neon"
+import { logEvent, serializeError } from "@/lib/observability"
 
 export async function handleApiError(error: unknown, statusCode = 500) {
-  console.error("[API Error]", error)
+  logEvent("error", "[API Error]", { error: serializeError(error), statusCode })
 
   if (error instanceof SyntaxError) {
     return NextResponse.json({ error: "Invalid request format" }, { status: 400 })
@@ -56,8 +57,8 @@ export async function withRateLimit(request: NextRequest, limit = 100, windowMs 
 
     return { allowed: true }
   } catch (error) {
-    console.error("Rate limit check failed:", error)
-    return { allowed: true } // Fail open to avoid blocking users
+    logEvent("warn", "Rate limit check failed; failing open", { error: serializeError(error) })
+    return { allowed: true }
   }
 }
 
@@ -70,6 +71,6 @@ export async function logAudit(userId: string, action: string, resource: string,
       [userId, action, resource, details ? JSON.stringify(details) : null],
     )
   } catch (error) {
-    console.error("Audit log failed:", error)
+    logEvent("error", "Audit log failed", { error: serializeError(error), action, resource, userId })
   }
 }
