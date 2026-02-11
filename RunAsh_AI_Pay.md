@@ -118,3 +118,37 @@ Please see `CONTRIBUTING.md` for guidelines on adding new Agent Skills or UI com
 **add new "Skills" to the agents?**
 
 ```
+
+---
+
+## Reliability Controls for Payment/Order/Agent Mutations
+
+### Idempotency contract (required)
+- Mutation endpoints that move money or change durable state now require an `idempotency-key` header.
+- Protected scopes include:
+  - `payment/create-intent`
+  - `payment/confirm`
+  - `orders` create/update operations
+  - agent action apply endpoints (insight apply)
+- Reusing a key with the same payload returns the original response.
+- Reusing a key with a different payload returns HTTP `409` conflict.
+
+### Provider call resilience
+- Provider-facing payment gateway calls use bounded retries with exponential backoff + jitter.
+- Retry policy defaults:
+  - max attempts: 3
+  - timeout: 5s per external request
+  - bounded delay window with jitter to avoid thundering herds
+
+### Async processing + DLQ
+- Long-running post-request workflows (video edit processing) are queue-backed and executed by background workers.
+- Dead-letter queue records failed jobs after max retry attempts.
+- Operators can inspect queue and dead-letter metrics from `/api/admin/jobs`.
+
+### Rollback procedure (payment/auth impacting incidents)
+1. Freeze new mutation traffic at the edge/API gateway for affected routes.
+2. Keep idempotency records active to prevent duplicate captures during retries/replays.
+3. Disable provider integration path if timeout/retry failure rates exceed SLO.
+4. Replay only verified dead-letter jobs with documented job IDs and operator approval.
+5. Validate ledger/order parity before unfreezing endpoints.
+6. Publish incident summary with blast radius, reconciliations, and prevention actions.
