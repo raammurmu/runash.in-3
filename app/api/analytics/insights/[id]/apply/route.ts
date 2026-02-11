@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { jsonError, parsePeriod, requireAnalyticsSession } from "../../../_lib"
+import { executeIdempotentMutation, getIdempotencyKeyFromHeaders } from "@/lib/idempotency"
 
 type ApplyInsightResponse = {
   ok: true
@@ -14,6 +15,11 @@ type ApplyInsightResponse = {
 export async function POST(request: Request, context: { params: { id: string } }) {
   const auth = await requireAnalyticsSession()
   if ("error" in auth) return auth.error
+
+  const idempotencyKey = getIdempotencyKeyFromHeaders(request.headers)
+  if (!idempotencyKey) {
+    return jsonError(400, "MISSING_IDEMPOTENCY_KEY", "Missing required header: idempotency-key.")
+  }
 
   const insightId = context.params.id?.trim()
 
@@ -35,15 +41,35 @@ export async function POST(request: Request, context: { params: { id: string } }
   const periodResult = parsePeriod(periodSearchParams)
   if (!periodResult.ok) return periodResult.response
 
-  const response: ApplyInsightResponse = {
-    ok: true,
-    data: {
-      insightId,
-      period: periodResult.period,
-      applied: true,
-      appliedAt: new Date().toISOString(),
-    },
-  }
+  try {
+    const result = await executeIdempotentMutation({
+      idempotencyKey,
+      scope: `agent-action:insight-apply:${auth.session.user.id}`,
+      requestHash: JSON.stringify({ insightId, period: periodResult.period }),
+      execute: async () => {
+        const response: ApplyInsightResponse = {
+          ok: true,
+          data: {
+            insightId,
+            period: periodResult.period,
+            applied: true,
+            appliedAt: new Date().toISOString(),
+          },
+        }
 
-  return NextResponse.json(response)
+        return {
+          statusCode: 200,
+          response,
+        }
+      },
+    })
+
+    return NextResponse.json(result.response, { status: result.statusCode })
+  } catch (error) {
+    if (error instanceof Error && error.message === "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD") {
+      return jsonError(409, "IDEMPOTENCY_CONFLICT", "Idempotency key reuse detected with a different payload.")
+    }
+
+    return jsonError(500, "INSIGHT_APPLY_ERROR", "Failed to apply insight action.")
+  }
 }
