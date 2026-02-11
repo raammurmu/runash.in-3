@@ -1035,3 +1035,27 @@ This comprehensive plan provides RunAsh Pay with a roadmap to establish itself a
 - Compliance/Legal: $20K - $50K
 - Testing/QA: $20K - $40K
 - Security/Audits: $10K - $60K
+
+---
+
+## Operational Reliability Addendum (Payments/Auth Business Flows)
+
+### Mandatory controls now enforced
+- **Idempotency for stateful mutations:** all payment/order/agent mutation APIs require `idempotency-key`.
+- **Bounded external calls:** provider integrations use timeout + retry with jitter and max-attempt limits.
+- **Queue-backed async work:** long-running operations are moved off request handlers into workers.
+- **Dead-letter management:** failed jobs are moved to DLQ after retry exhaustion and are operator-reviewable.
+- **Ops dashboard:** queue and dead-letter summaries are exposed via `/api/admin/jobs` for incident response.
+
+### Risk notes
+- In-memory queue/idempotency state is process-scoped; production deployment should back these stores with Redis/Postgres for multi-instance consistency.
+- API handlers remain backward compatible on payload schema; only additional request header requirement is introduced on mutation endpoints in scope.
+
+### Rollback runbook (payment/auth-impacting failures)
+1. Activate safe mode: block new write/mutation traffic on impacted endpoints.
+2. Route reads to last-known-good path while reconciliation runs.
+3. Pause worker consumption and export dead-letter list for triage.
+4. Reconcile transactions against provider settlement and order state.
+5. Re-enable writes progressively (payment create-intent → confirm → order updates → agent actions).
+6. Replay verified dead-letter jobs with idempotency keys preserved.
+7. Complete post-incident report with rollback timing, data corrections, and customer impact.

@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { neon } from "@neondatabase/serverless"
+import { executeIdempotentMutation, getIdempotencyKeyFromHeaders } from "@/lib/idempotency"
+import { jobQueue } from "@/lib/job-queue"
+import { ensureRecordingEditWorkerRegistered } from "@/lib/workers/recording-edit-worker"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -12,33 +15,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const idempotencyKey = getIdempotencyKeyFromHeaders(request.headers)
+    if (!idempotencyKey) {
+      return NextResponse.json({ error: "Missing required header: idempotency-key" }, { status: 400 })
+    }
+
     const editedVideo = await request.json()
+    ensureRecordingEditWorkerRegistered()
 
-    // Create a new edited version record
-    const result = await sql`
-      INSERT INTO streams (
-        user_id, title, description, status, 
-        start_time, end_time, filters, audio_level,
-        export_settings, original_stream_id, created_at
-      ) VALUES (
-        ${session.user.id}, ${editedVideo.title}, 'Edited version',
-        'processing', ${editedVideo.startTime}, ${editedVideo.endTime},
-        ${JSON.stringify(editedVideo.filters)}, ${editedVideo.audioLevel},
-        ${JSON.stringify(editedVideo.exportSettings)}, ${editedVideo.originalId},
-        NOW()
-      ) RETURNING id
-    `
+    const result = await executeIdempotentMutation({
+      idempotencyKey,
+      scope: `recordings:edit:${session.user.id}`,
+      requestHash: JSON.stringify(editedVideo),
+      execute: async () => {
+        const insertResult = await sql`
+          INSERT INTO streams (
+            user_id, title, description, status,
+            start_time, end_time, filters, audio_level,
+            export_settings, original_stream_id, created_at
+          ) VALUES (
+            ${session.user.id}, ${editedVideo.title}, 'Edited version',
+            'processing', ${editedVideo.startTime}, ${editedVideo.endTime},
+            ${JSON.stringify(editedVideo.filters)}, ${editedVideo.audioLevel},
+            ${JSON.stringify(editedVideo.exportSettings)}, ${editedVideo.originalId},
+            NOW()
+          ) RETURNING id
+        `
 
-    // In a real implementation, you would queue a background job
-    // to process the video with the specified edits
+        const editId = insertResult[0].id
+        const job = jobQueue.enqueue("recording-edit-process", {
+          editId,
+          userId: session.user.id,
+          originalId: editedVideo.originalId,
+        })
 
-    return NextResponse.json({
-      success: true,
-      editId: result[0].id,
-      message: "Video edit queued for processing",
+        return {
+          statusCode: 202,
+          response: {
+            success: true,
+            editId,
+            jobId: job.id,
+            message: "Video edit queued for background processing",
+          },
+        }
+      },
     })
+
+    return NextResponse.json(result.response, { status: result.statusCode })
   } catch (error) {
-    console.error("Error saving edited video:", error)
+    if (error instanceof Error && error.message === "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD") {
+      return NextResponse.json({ error: "Idempotency key reuse detected with a different payload" }, { status: 409 })
+    }
+
     return NextResponse.json({ error: "Failed to save edited video" }, { status: 500 })
   }
 }

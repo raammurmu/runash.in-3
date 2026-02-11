@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getSql } from "@/lib/db/neon"
+import { executeIdempotentMutation, getIdempotencyKeyFromHeaders } from "@/lib/idempotency"
 
 export async function GET(req: Request) {
   try {
@@ -30,8 +31,12 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  // Optional: create manual orders if needed
   try {
+    const idempotencyKey = getIdempotencyKeyFromHeaders(req.headers)
+    if (!idempotencyKey) {
+      return NextResponse.json({ error: "Missing required header: idempotency-key" }, { status: 400 })
+    }
+
     const body = await req.json()
     const userId = Number(req.headers.get("x-user-id") || 1)
     const sql = getSql()
@@ -39,28 +44,43 @@ export async function POST(req: Request) {
     const { buyer_name, buyer_email, buyer_phone, shipping_address, payment_method, items = [] } = body
     const total = items.reduce((sum: number, it: any) => sum + Number(it.price) * Number(it.quantity), 0)
 
-    const [order] =
-      await sql /* sql */`INSERT INTO public.orders (user_id, buyer_name, buyer_email, buyer_phone, shipping_address, payment_method, total)
+    const result = await executeIdempotentMutation({
+      idempotencyKey,
+      scope: `orders:create:${userId}`,
+      requestHash: JSON.stringify({ buyer_name, buyer_email, buyer_phone, shipping_address, payment_method, items }),
+      execute: async () => {
+        const [order] =
+          await sql /* sql */`INSERT INTO public.orders (user_id, buyer_name, buyer_email, buyer_phone, shipping_address, payment_method, total)
                           VALUES (${userId}, ${buyer_name}, ${buyer_email}, ${buyer_phone}, ${shipping_address}, ${payment_method}, ${total})
                           RETURNING id, status, total, created_at`
 
-    for (const it of items) {
-      await sql /* sql */`
-        INSERT INTO public.order_items (order_id, product_id, name, quantity, price)
-        VALUES (${order.id}, ${it.product_id || null}, ${it.name}, ${it.quantity}, ${it.price})
-      `
-      // Optional: decrement stock & increment sales
-      if (it.product_id) {
-        await sql /* sql */`
-          UPDATE public.products
-          SET stock = GREATEST(0, stock - ${it.quantity}), sales = sales + ${it.quantity}
-          WHERE id = ${it.product_id}
-        `
-      }
+        for (const it of items) {
+          await sql /* sql */`
+            INSERT INTO public.order_items (order_id, product_id, name, quantity, price)
+            VALUES (${order.id}, ${it.product_id || null}, ${it.name}, ${it.quantity}, ${it.price})
+          `
+          if (it.product_id) {
+            await sql /* sql */`
+              UPDATE public.products
+              SET stock = GREATEST(0, stock - ${it.quantity}), sales = sales + ${it.quantity}
+              WHERE id = ${it.product_id}
+            `
+          }
+        }
+
+        return {
+          statusCode: 201,
+          response: { id: order.id, total, status: order.status },
+        }
+      },
+    })
+
+    return NextResponse.json(result.response, { status: result.statusCode })
+  } catch (e: any) {
+    if (e instanceof Error && e.message === "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD") {
+      return NextResponse.json({ error: "Idempotency key reuse detected with a different payload" }, { status: 409 })
     }
 
-    return NextResponse.json({ id: order.id, total, status: order.status }, { status: 201 })
-  } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
