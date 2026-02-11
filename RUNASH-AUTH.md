@@ -322,3 +322,10 @@ Once Phase 1 is stable (24+ hours without issues):
 | `GITHUB_CLIENT_ID` | GitHub OAuth | `abc123...` |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth secret | `abc123...` |
 | `MIGRATION_SECRET` | Admin-only operations | `migration_token_xyz` |
+
+## 2026 Auth protections: tracing, quotas, and log redaction
+
+- Auth routes now emit structured JSON logs with redaction for emails/tokens/password-like fields.
+- Middleware injects and forwards correlation IDs for request tracing across auth flows.
+- Registration and forgot-password endpoints enforce both per-IP and per-user quotas to reduce abuse.
+- Error logging in auth API helpers now uses redacted structured logs.

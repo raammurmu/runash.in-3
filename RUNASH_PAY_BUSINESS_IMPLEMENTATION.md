@@ -1035,3 +1035,14 @@ This comprehensive plan provides RunAsh Pay with a roadmap to establish itself a
 - Compliance/Legal: $20K - $50K
 - Testing/QA: $20K - $40K
 - Security/Audits: $10K - $60K
+
+## 2026 reliability + auditability enhancements
+
+- Introduced structured payment logs with correlation IDs to improve incident triage and traceability.
+- Added CI security/dependency scanning gates and explicit API SLO thresholds for error-rate and latency alerting.
+- Webhook controls now include signature verification and replay protections with safe failure responses.
+
+### Risks and rollback
+
+- Risk: stricter webhook/signature checks can reject misconfigured provider callbacks.
+- Rollback: disable strict email webhook signing by unsetting `EMAIL_WEBHOOK_SIGNING_SECRET`; for Stripe, restore prior endpoint handler if providers cannot send valid signatures.

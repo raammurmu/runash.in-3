@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { RBACManager } from "@/lib/rbac"
+import { generateCorrelationId } from "@/lib/observability"
 
 // Security headers
 const securityHeaders = {
@@ -54,7 +55,19 @@ function checkRateLimit(request: NextRequest, identifier: string, limit: number,
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const response = NextResponse.next()
+  const correlationId = request.headers.get("x-correlation-id") || generateCorrelationId()
+  const requestId = request.headers.get("x-request-id") || generateCorrelationId()
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set("x-correlation-id", correlationId)
+  requestHeaders.set("x-request-id", requestId)
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  })
+
+  response.headers.set("x-correlation-id", correlationId)
+  response.headers.set("x-request-id", requestId)
 
   // Add security headers to all responses
   Object.entries(securityHeaders).forEach(([key, value]) => {

@@ -118,3 +118,9 @@ Please see `CONTRIBUTING.md` for guidelines on adding new Agent Skills or UI com
 **add new "Skills" to the agents?**
 
 ```
+
+## Reliability controls update (2026)
+
+- Payment initiation and checkout endpoints now enforce dual quotas (IP/user) to mitigate abuse while preserving existing contracts.
+- Billing webhook processing now blocks replayed events and rejects invalid/missing signatures before processing.
+- Correlation IDs are now attached to payment API flows and service-layer payment logs for auditability.
