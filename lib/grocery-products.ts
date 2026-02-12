@@ -1,4 +1,5 @@
 import type { GroceryProduct } from "@/types/grocery-store"
+import { getAiImageSet } from "./ai-image"
 
 export interface Product {
   id: string
@@ -3975,6 +3976,22 @@ export const groceryProducts: Product[] = [
     reviewCount: 189,
   },
 ]
+
+const GroceryProducts: Product[] = groceryProducts.map((product) => {
+  const generatedImages = getAiImageSet({
+    prompt: `${product.name}. ${product.description}`,
+    seed: product.id,
+    alt: product.imageAlt ?? product.name,
+  })
+
+  return {
+    ...product,
+    image: generatedImages.image || product.image,
+    imageHd: generatedImages.imageHd || product.imageHd,
+    imageThumb: generatedImages.imageThumb || product.imageThumb,
+    imageAlt: generatedImages.imageAlt || product.imageAlt,
+  }
+})
 
 export async function fetchGroceryProducts(delay = 1000): Promise<GroceryProduct[]> {
   return new Promise((resolve) => setTimeout(() => resolve(GroceryProducts), delay))

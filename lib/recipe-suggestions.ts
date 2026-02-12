@@ -1,6 +1,7 @@
 import type { Recipe, UserPreferences } from "../types/runash-chat"
+import { getAiImageSet } from "./ai-image"
 
-export const RECIPE_SUGGESTIONS: Recipe[] = [
+const RECIPE_SUGGESTION_SEED: Recipe[] = [
   {
     id: "recipe-1",
     name: "Quinoa Veggie Power Bowl",
@@ -104,6 +105,22 @@ export const RECIPE_SUGGESTIONS: Recipe[] = [
     },
   },
 ]
+
+export const RECIPE_SUGGESTIONS: Recipe[] = RECIPE_SUGGESTION_SEED.map((recipe) => {
+  const generatedImages = getAiImageSet({
+    prompt: `${recipe.name}. ${recipe.description}`,
+    seed: recipe.id,
+    alt: recipe.imageAlt ?? recipe.name,
+  })
+
+  return {
+    ...recipe,
+    image: generatedImages.image || recipe.image,
+    imageHd: generatedImages.imageHd || recipe.imageHd,
+    imageThumb: generatedImages.imageThumb || recipe.imageThumb,
+    imageAlt: generatedImages.imageAlt || recipe.imageAlt,
+  }
+})
 
 export const getRecipeSuggestions = (input: string, prefs?: UserPreferences): Recipe[] => {
   const query = input.toLowerCase()

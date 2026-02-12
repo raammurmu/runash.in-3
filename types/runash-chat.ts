@@ -77,6 +77,10 @@ export interface SustainabilityTip {
   category: "energy" | "waste" | "water" | "food" | "transport" | "shopping"
   impact: "low" | "medium" | "high"
   difficulty: "easy" | "medium" | "hard"
+  image?: string
+  imageHd?: string
+  imageThumb?: string
+  imageAlt?: string
   estimatedSavings?: number
 }
 
@@ -86,6 +90,10 @@ export interface AutomationSuggestion {
   description: string
   category: "inventory" | "pricing" | "marketing" | "customer-service" | "analytics"
   complexity: "simple" | "moderate" | "advanced"
+  image?: string
+  imageHd?: string
+  imageThumb?: string
+  imageAlt?: string
   estimatedROI: number
   implementationTime: string
   tools: string[]

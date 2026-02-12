@@ -1,6 +1,7 @@
 import type { AutomationSuggestion, UserPreferences } from "../types/runash-chat"
+import { getAiImageSet } from "./ai-image"
 
-export const AUTOMATION_SUGGESTIONS: AutomationSuggestion[] = [
+const AUTOMATION_SUGGESTION_SEED: AutomationSuggestion[] = [
   {
     id: "automation-1",
     title: "Demand-Aware Inventory Alerts",
@@ -52,6 +53,22 @@ export const AUTOMATION_SUGGESTIONS: AutomationSuggestion[] = [
     tools: ["BI platform", "Scheduled reports", "Alerting rules"],
   },
 ]
+
+export const AUTOMATION_SUGGESTIONS: AutomationSuggestion[] = AUTOMATION_SUGGESTION_SEED.map((suggestion) => {
+  const generatedImages = getAiImageSet({
+    prompt: `${suggestion.title}. ${suggestion.description}`,
+    seed: suggestion.id,
+    alt: suggestion.imageAlt ?? suggestion.title,
+  })
+
+  return {
+    ...suggestion,
+    image: generatedImages.image || suggestion.image,
+    imageHd: generatedImages.imageHd || suggestion.imageHd,
+    imageThumb: generatedImages.imageThumb || suggestion.imageThumb,
+    imageAlt: generatedImages.imageAlt || suggestion.imageAlt,
+  }
+})
 
 export const getAutomationSuggestions = (input: string, prefs?: UserPreferences): AutomationSuggestion[] => {
   const query = input.toLowerCase()

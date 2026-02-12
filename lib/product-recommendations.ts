@@ -1,6 +1,7 @@
 import type { Product, ProductCategory, UserPreferences } from "../types/runash-chat"
+import { getAiImageSet } from "./ai-image"
 
-export const PRODUCT_RECOMMENDATIONS: Product[] = [
+const PRODUCT_RECOMMENDATION_SEED: Product[] = [
   {
     id: "product-1",
     name: "Organic Quinoa",
@@ -98,6 +99,22 @@ export const PRODUCT_RECOMMENDATIONS: Product[] = [
     carbonFootprint: 2.4,
   },
 ]
+
+export const PRODUCT_RECOMMENDATIONS: Product[] = PRODUCT_RECOMMENDATION_SEED.map((product) => {
+  const generatedImages = getAiImageSet({
+    prompt: `${product.name}. ${product.description}`,
+    seed: product.id,
+    alt: product.imageAlt ?? product.name,
+  })
+
+  return {
+    ...product,
+    image: generatedImages.image || product.image,
+    imageHd: generatedImages.imageHd || product.imageHd,
+    imageThumb: generatedImages.imageThumb || product.imageThumb,
+    imageAlt: generatedImages.imageAlt || product.imageAlt,
+  }
+})
 
 const CATEGORY_KEYWORDS: Record<ProductCategory, string[]> = {
   "fruits-vegetables": ["produce", "vegetable", "fruit", "fresh"],

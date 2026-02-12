@@ -1,6 +1,7 @@
 import type { SustainabilityTip, UserPreferences } from "../types/runash-chat"
+import { getAiImageSet } from "./ai-image"
 
-export const SUSTAINABILITY_TIPS: SustainabilityTip[] = [
+const SUSTAINABILITY_TIP_SEED: SustainabilityTip[] = [
   {
     id: "tip-1",
     title: "Batch Cook Weekly Meals",
@@ -47,6 +48,22 @@ export const SUSTAINABILITY_TIPS: SustainabilityTip[] = [
     estimatedSavings: 18,
   },
 ]
+
+export const SUSTAINABILITY_TIPS: SustainabilityTip[] = SUSTAINABILITY_TIP_SEED.map((tip) => {
+  const generatedImages = getAiImageSet({
+    prompt: `${tip.title}. ${tip.description}`,
+    seed: tip.id,
+    alt: tip.imageAlt ?? tip.title,
+  })
+
+  return {
+    ...tip,
+    image: generatedImages.image || tip.image,
+    imageHd: generatedImages.imageHd || tip.imageHd,
+    imageThumb: generatedImages.imageThumb || tip.imageThumb,
+    imageAlt: generatedImages.imageAlt || tip.imageAlt,
+  }
+})
 
 export const getSustainabilityTips = (input: string, prefs?: UserPreferences): SustainabilityTip[] => {
   const query = input.toLowerCase()
