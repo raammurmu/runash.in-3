@@ -63,3 +63,14 @@ export async function getChatSessionById(userId: string, sessionId: string): Pro
     limit 1
   `)
 }
+
+
+export async function deleteChatSession(userId: string, sessionId: string): Promise<boolean> {
+  const rows = await sql<{ id: string }[]>`
+    delete from runash_chat_sessions
+    where user_id=${userId} and id=${sessionId}
+    returning id
+  `
+
+  return rows.length > 0
+}

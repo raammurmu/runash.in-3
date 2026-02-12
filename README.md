@@ -116,6 +116,7 @@ RunAsh AI combines live streaming, AI-assisted creation tooling, seller operatio
 - Payout tab is API-backed (`GET /api/seller/payouts`) with settlement summaries and weekly history.
 - Inventory supports inline stock edits and guarded deletes for production workflows.
 - RunAsh Chat landing (`/runash-chat`) includes an enhanced mini preview with quick agentic commerce/payment prompts, with session continuity dependent on `GET /api/sessions/recent` and `GET /api/messages/session/:id` being available.
+- `/chat` now hydrates conversation history from `GET /api/messages/session/:id`, persists turn messages via `POST /api/messages`, and supports session removal through `DELETE /api/sessions/:id`.
 
 ### Current limitations (RunAsh Chat preview)
 - If either preview dependency endpoint (`/api/sessions/recent` or `/api/messages/session/:id`) is unavailable in a target deployment, the mini preview falls back to an error or empty state while users can still continue into `/chat`.
@@ -149,6 +150,13 @@ Response payload includes:
 - `pagination`: `{ limit, offset, nextOffset, hasMore, cursor, nextCursor }`.
 
 `GET /api/chat` requires an authenticated session and only returns chat history for streams owned by the current user.
+
+
+### Optional search integrations
+Set these environment variables to enable live product web search providers:
+- `EXA_API_KEY` for Exa neural web search
+- `RUNASH_MCP_SEARCH_ENDPOINT` for custom MCP-compatible search endpoint
+- `RUNASH_MCP_SEARCH_TOKEN` optional bearer token for MCP endpoint auth
 
 ## Validation commands
 ```bash

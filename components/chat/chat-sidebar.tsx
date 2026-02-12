@@ -13,9 +13,11 @@ interface ChatSidebarProps {
   sessions: ChatSession[]
   onSessionSelect: (session: ChatSession) => void
   currentSession: ChatSession | null
+  onNewChat?: () => void
+  onDeleteSession?: (sessionId: string) => void
 }
 
-export default function ChatSidebar({ sessions, onSessionSelect, currentSession }: ChatSidebarProps) {
+export default function ChatSidebar({ sessions, onSessionSelect, currentSession, onNewChat, onDeleteSession }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
 
   const fallbackSessions: ChatSession[] = [
@@ -82,13 +84,11 @@ export default function ChatSidebar({ sessions, onSessionSelect, currentSession 
   )
 
   const handleNewChat = () => {
-    // Create new chat session
-    console.log("Create new chat")
+    onNewChat?.()
   }
 
   const handleDeleteSession = (sessionId: string) => {
-    // Delete session
-    console.log("Delete session:", sessionId)
+    onDeleteSession?.(sessionId)
   }
 
   const getSessionIcon = (session: ChatSession) => {

@@ -144,6 +144,7 @@ export const mapGroceryProductToChatProduct = (product: GroceryCatalogProduct): 
     isOrganic: product.organic,
     sustainabilityScore,
     image: product.image,
+    arModelUrl: `https://modelviewer.dev/shared-assets/models/Astronaut.glb?product=${encodeURIComponent(product.id)}`,
     inStock: product.inStock,
     certifications: [
       ...(product.organic ? ["Certified Organic"] : []),

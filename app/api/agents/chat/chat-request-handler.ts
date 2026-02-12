@@ -5,7 +5,7 @@ export function buildToolPlan(tools: SupportedTool[]) {
   const queued: SupportedTool[] = []
 
   for (const tool of tools) {
-    if (tool === "catalog_lookup") {
+    if (tool === "catalog_lookup" || tool === "web_search") {
       immediate.push(tool)
       continue
     }

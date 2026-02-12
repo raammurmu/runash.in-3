@@ -9,13 +9,13 @@ export interface TTSSettings {
 
 export class TextToSpeechService {
   private synth: SpeechSynthesis | null = null
-  private isSupported = false
+  private supported = false
   private currentUtterance: SpeechSynthesisUtterance | null = null
 
   constructor() {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       this.synth = window.speechSynthesis
-      this.isSupported = true
+      this.supported = true
     }
   }
 
@@ -85,6 +85,6 @@ export class TextToSpeechService {
   }
 
   isSupported(): boolean {
-    return this.isSupported
+    return this.supported
   }
 }

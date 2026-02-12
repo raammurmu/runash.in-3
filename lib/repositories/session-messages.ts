@@ -71,3 +71,14 @@ export async function getMessageBySession(
     limit 1
   `)
 }
+
+
+export async function deleteMessagesBySession(sessionId: string): Promise<number> {
+  const rows = await sql<{ id: string | number }[]>`
+    delete from runash_chat_session_messages
+    where session_id=${sessionId}
+    returning id
+  `
+
+  return rows.length
+}

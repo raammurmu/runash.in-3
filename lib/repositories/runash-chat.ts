@@ -3,12 +3,14 @@ import path from "path"
 
 import {
   createChatSession,
+  deleteChatSession,
   getMostRecentChatSession,
   listChatSessions,
   type ChatSession,
 } from "@/lib/repositories/sessions"
 import {
   createChatSessionMessage,
+  deleteMessagesBySession,
   listMessagesBySession,
   type ChatSessionMessage,
 } from "@/lib/repositories/session-messages"
@@ -140,4 +142,23 @@ export async function createSessionMessage(
   writeJsonFile(MESSAGES_FILE, messages)
 
   return newMessage
+}
+
+
+export async function deleteSession(sessionId: string, userId?: string): Promise<boolean> {
+  if (useDatabaseBackedChatStorage) {
+    await deleteMessagesBySession(String(sessionId))
+    return deleteChatSession(resolveUserId(userId), String(sessionId))
+  }
+
+  const normalizedSessionId = String(sessionId)
+  const sessions = await listSessions()
+  const nextSessions = sessions.filter((session) => String(session.id) !== normalizedSessionId)
+  writeJsonFile(SESSIONS_FILE, nextSessions)
+
+  const messages = readJsonFile<RunashSessionMessage[]>(MESSAGES_FILE, [])
+  const nextMessages = messages.filter((message) => String(message.session_id) !== normalizedSessionId)
+  writeJsonFile(MESSAGES_FILE, nextMessages)
+
+  return nextSessions.length !== sessions.length
 }

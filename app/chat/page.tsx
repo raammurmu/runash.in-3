@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card } from "@/components/ui/card"
-import { Send, Sparkles, Leaf, Settings, History, Bot, Mic } from "lucide-react"
+import { Send, Sparkles, Leaf, Settings, History, Bot, Mic, Search } from "lucide-react"
 import type { ChatMessage, ChatSession, UserPreferences, QuickAction } from "@/types/runash-chat"
 import ChatMessageComponent from "@/components/chat/chat-message"
 import QuickActions from "@/components/chat/quick-actions"
@@ -34,6 +34,22 @@ export default function RunAshChatPage() {
     type: "text",
   }
 
+
+  const mapApiMessageToChatMessage = (item: {
+    id: string | number
+    content: string
+    role: "assistant" | "user"
+    created_at?: string
+    message_type?: "text" | "product" | "recipe" | "tip" | "automation"
+  }): ChatMessage => ({
+    id: String(item.id),
+    content: item.content,
+    role: item.role,
+    timestamp: new Date(item.created_at ?? Date.now()),
+    type: item.message_type ?? "text",
+    status: "completed",
+  })
+
   const [messages, setMessages] = useState<ChatMessage[]>([defaultAssistantMessage])
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
@@ -43,17 +59,75 @@ export default function RunAshChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const [userPreferences, setUserPreferences] = useState<UserPreferences>({
-    dietaryRestrictions: [],
-    sustainabilityPriority: "medium",
-    budgetRange: [0, 100],
-    preferredCategories: [],
-    cookingSkillLevel: "intermediate",
+  const [userPreferences, setUserPreferences] = useState<UserPreferences>(() => {
+    if (typeof window === "undefined") {
+      return {
+        dietaryRestrictions: [],
+        sustainabilityPriority: "medium",
+        budgetRange: [0, 100],
+        preferredCategories: [],
+        cookingSkillLevel: "intermediate",
+      }
+    }
+
+    try {
+      const stored = window.localStorage.getItem("runash_chat_preferences")
+      if (!stored) {
+        return {
+          dietaryRestrictions: [],
+          sustainabilityPriority: "medium",
+          budgetRange: [0, 100],
+          preferredCategories: [],
+          cookingSkillLevel: "intermediate",
+        }
+      }
+
+      const parsed = JSON.parse(stored) as Partial<UserPreferences>
+      return {
+        dietaryRestrictions: Array.isArray(parsed.dietaryRestrictions) ? parsed.dietaryRestrictions : [],
+        sustainabilityPriority:
+          parsed.sustainabilityPriority === "low" || parsed.sustainabilityPriority === "high"
+            ? parsed.sustainabilityPriority
+            : "medium",
+        budgetRange:
+          Array.isArray(parsed.budgetRange) && parsed.budgetRange.length === 2
+            ? [Number(parsed.budgetRange[0]) || 0, Number(parsed.budgetRange[1]) || 100]
+            : [0, 100],
+        preferredCategories: Array.isArray(parsed.preferredCategories) ? parsed.preferredCategories : [],
+        cookingSkillLevel:
+          parsed.cookingSkillLevel === "beginner" || parsed.cookingSkillLevel === "advanced"
+            ? parsed.cookingSkillLevel
+            : "intermediate",
+        businessType: parsed.businessType,
+      }
+
+      if (activeSessionId && assistantContent.trim()) {
+        await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: activeSessionId,
+            role: "assistant",
+            content: assistantContent,
+            messageType: "text",
+          }),
+        }).catch(() => undefined)
+      }
+    } catch {
+      return {
+        dietaryRestrictions: [],
+        sustainabilityPriority: "medium",
+        budgetRange: [0, 100],
+        preferredCategories: [],
+        cookingSkillLevel: "intermediate",
+      }
+    }
   })
 
   const [voiceEnabled, setVoiceEnabled] = useState(false)
+  const [voiceTranscriptHistory, setVoiceTranscriptHistory] = useState<string[]>([])
 
-  const [chatSessions] = useState<ChatSession[]>([
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([
     {
       id: "1",
       title: "Organic Breakfast Ideas",
@@ -185,6 +259,13 @@ export default function RunAshChatPage() {
       action: () => handleQuickAction("Help me automate my organic store inventory"),
       category: "automation",
     },
+    {
+      id: "5",
+      label: "Web Product Search",
+      icon: "search",
+      action: () => handleQuickAction("Search the web for eco-friendly organic pantry bundles under $30", "search"),
+      category: "search",
+    },
   ]
 
   useEffect(() => {
@@ -195,9 +276,91 @@ export default function RunAshChatPage() {
     inputRef.current?.focus()
   }, [])
 
-  const loadSession = (session: ChatSession) => {
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("runash_chat_preferences", JSON.stringify(userPreferences))
+    } catch {
+      // ignore storage errors
+    }
+  }, [userPreferences])
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const response = await fetch("/api/sessions")
+        if (!response.ok) return
+        const payload = await response.json()
+        const listed = Array.isArray(payload?.data) ? payload.data : []
+        if (listed.length === 0) return
+
+        setChatSessions((previous) => {
+          const mapped = listed.map((entry: { id: string; title?: string; created_at?: string }) => ({
+            id: String(entry.id),
+            title: entry.title ?? "Session",
+            messages: [],
+            createdAt: new Date(entry.created_at ?? Date.now()),
+            updatedAt: new Date(entry.created_at ?? Date.now()),
+            context: {
+              preferences: {
+                dietaryRestrictions: [],
+                sustainabilityPriority: "medium" as const,
+                budgetRange: [0, 100] as [number, number],
+                preferredCategories: [],
+                cookingSkillLevel: "intermediate" as const,
+              },
+              currentCart: [],
+              recentSearches: [],
+            },
+          }))
+
+          return [...mapped, ...previous.filter((session) => !mapped.some((item) => item.id === session.id))]
+        })
+      } catch {
+        // keep local fallback sessions when api is unavailable
+      }
+    })()
+  }, [])
+
+  const loadSession = async (session: ChatSession) => {
     setCurrentSession(session)
-    setMessages(session.messages.length > 0 ? session.messages : [defaultAssistantMessage])
+
+    try {
+      const response = await fetch(`/api/messages/session/${encodeURIComponent(session.id)}?limit=50`)
+      const payload = await response.json()
+      const listed = Array.isArray(payload?.data) ? payload.data : []
+      if (listed.length === 0) {
+        setMessages(session.messages.length > 0 ? session.messages : [defaultAssistantMessage])
+        return
+      }
+
+      const mappedMessages = listed
+        .map(mapApiMessageToChatMessage)
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+
+      setMessages(mappedMessages)
+    } catch {
+      setMessages(session.messages.length > 0 ? session.messages : [defaultAssistantMessage])
+    }
+  }
+
+  const handleNewChatSession = () => {
+    setCurrentSession(null)
+    setMessages([defaultAssistantMessage])
+    setInputValue("")
+  }
+
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" })
+    } catch {
+      // keep local fallback deletion even if api call fails
+    }
+
+    setChatSessions((prev) => prev.filter((session) => session.id !== sessionId))
+    if (currentSession?.id === sessionId) {
+      setCurrentSession(null)
+      setMessages([defaultAssistantMessage])
+    }
   }
 
   useEffect(() => {
@@ -220,8 +383,58 @@ export default function RunAshChatPage() {
     handleSendMessage(storedPrompt)
   }, [])
 
-  const handleQuickAction = (message: string) => {
+  const handleQuickAction = async (message: string, mode: QuickAction["category"] = "product") => {
     setInputValue(message)
+
+    if (mode === "search") {
+      const userMessage: ChatMessage = {
+        id: `${Date.now()}-search-user`,
+        content: message,
+        role: "user",
+        timestamp: new Date(),
+        type: "text",
+        status: "completed",
+      }
+
+      setMessages((prev) => [...prev, userMessage])
+      setIsTyping(true)
+
+      try {
+        const response = await fetch(`/api/web-search?query=${encodeURIComponent(message)}`)
+        const payload = await response.json()
+        const searchResults = Array.isArray(payload?.data?.results) ? payload.data.results : []
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `${Date.now()}-search-assistant`,
+            content: "Here are top product search results from EXA/MCP-compatible providers.",
+            role: "assistant",
+            timestamp: new Date(),
+            type: "text",
+            status: "completed",
+            metadata: { searchResults },
+          },
+        ])
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `${Date.now()}-search-error`,
+            content: "Web search is unavailable right now. Please try again in a moment.",
+            role: "assistant",
+            timestamp: new Date(),
+            type: "text",
+            status: "failed",
+          },
+        ])
+      } finally {
+        setIsTyping(false)
+      }
+
+      return
+    }
+
     handleSendMessage(message)
   }
 
@@ -252,15 +465,63 @@ export default function RunAshChatPage() {
     setInputValue("")
     setIsTyping(true)
 
+    let activeSessionId = currentSession?.id ?? querySessionId ?? undefined
+
     try {
+      if (!activeSessionId) {
+        const createSessionResponse = await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: content.slice(0, 48) || "RunAsh Agent Session" }),
+        })
+        const createdSessionPayload = await createSessionResponse.json()
+        const createdSession = createdSessionPayload?.data
+
+        if (createdSession?.id) {
+          activeSessionId = String(createdSession.id)
+          const mappedSession: ChatSession = {
+            id: activeSessionId,
+            title: createdSession.title ?? "RunAsh Agent Session",
+            messages: [],
+            createdAt: new Date(createdSession.created_at ?? Date.now()),
+            updatedAt: new Date(createdSession.created_at ?? Date.now()),
+            context: {
+              preferences: userPreferences,
+              currentCart: [],
+              recentSearches: [content],
+            },
+          }
+
+          setCurrentSession(mappedSession)
+          setChatSessions((prev) => [mappedSession, ...prev.filter((session) => session.id !== mappedSession.id)])
+        }
+      }
+
+      if (activeSessionId) {
+        await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: activeSessionId,
+            role: "user",
+            content,
+            messageType: "text",
+          }),
+        })
+      }
+
+      const requestedTools = /search|find|best|compare|web/i.test(content)
+        ? ["catalog_lookup", "web_search"]
+        : ["catalog_lookup"]
+
       const response = await fetch("/api/agents/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: currentSession?.id ?? querySessionId ?? undefined,
+          sessionId: activeSessionId,
           title: currentSession?.title ?? "RunAsh Agent Session",
           message: content,
-          tools: ["catalog_lookup"],
+          tools: requestedTools,
         }),
       })
 
@@ -271,6 +532,8 @@ export default function RunAshChatPage() {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ""
+      let streamedSearchResults: NonNullable<ChatMessage["metadata"]>["searchResults"] = undefined
+      let assistantContent = ""
 
       const updateAssistantMessage = (updater: (existing: ChatMessage) => ChatMessage) => {
         setMessages((prev) => prev.map((item) => (item.id === assistantId ? updater(item) : item)))
@@ -295,10 +558,12 @@ export default function RunAshChatPage() {
           const payload = JSON.parse(payloadLine)
 
           if (eventName === "token") {
+            const token = String(payload.token ?? "")
+            assistantContent += token
             updateAssistantMessage((existing) => ({
               ...existing,
               status: "streaming",
-              content: `${existing.content}${String(payload.token ?? "")}`,
+              content: `${existing.content}${token}`,
             }))
           }
 
@@ -306,11 +571,35 @@ export default function RunAshChatPage() {
             updateAssistantMessage((existing) => ({ ...existing, status: "tool-running" }))
           }
 
+          if (eventName === "tool_result" && payload.tool === "web_search") {
+            const maybeResults = payload?.result?.results
+            if (Array.isArray(maybeResults)) {
+              streamedSearchResults = maybeResults
+              updateAssistantMessage((existing) => ({
+                ...existing,
+                metadata: {
+                  ...existing.metadata,
+                  searchResults: maybeResults,
+                },
+              }))
+            }
+          }
+
           if (eventName === "final") {
+            if (typeof payload.content === "string" && payload.content.length > 0) {
+              assistantContent = payload.content
+            }
+
             updateAssistantMessage((existing) => ({
               ...existing,
               status: payload.status === "completed" ? "completed" : existing.status,
-              content: typeof payload.content === "string" && payload.content.length > 0 ? payload.content : existing.content,
+              content: assistantContent || existing.content,
+              metadata: streamedSearchResults
+                ? {
+                    ...existing.metadata,
+                    searchResults: streamedSearchResults,
+                  }
+                : existing.metadata,
             }))
           }
 
@@ -318,6 +607,19 @@ export default function RunAshChatPage() {
             updateAssistantMessage((existing) => ({ ...existing, status: "failed" }))
           }
         }
+      }
+
+      if (activeSessionId && assistantContent.trim()) {
+        await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: activeSessionId,
+            role: "assistant",
+            content: assistantContent,
+            messageType: "text",
+          }),
+        }).catch(() => undefined)
       }
     } catch {
       const fallback = buildAssistantResponse(content)
@@ -500,6 +802,7 @@ export default function RunAshChatPage() {
   }
 
   const handleVoiceInput = (transcript: string) => {
+    setVoiceTranscriptHistory((prev) => [transcript, ...prev].slice(0, 5))
     setInputValue(transcript)
     handleSendMessage(transcript)
   }
@@ -553,6 +856,8 @@ export default function RunAshChatPage() {
               sessions={chatSessions}
               onSessionSelect={loadSession}
               currentSession={currentSession}
+              onNewChat={handleNewChatSession}
+              onDeleteSession={handleDeleteSession}
             />
           </div>
         )}
@@ -596,7 +901,21 @@ export default function RunAshChatPage() {
 
             {/* Voice Controls */}
             {voiceEnabled && (
-              <div className="p-4 border-t">
+              <div className="p-4 border-t space-y-3">
+                {voiceTranscriptHistory.length > 0 && (
+                  <div className="rounded-md border bg-green-50/60 p-2 text-xs dark:bg-green-900/20">
+                    <div className="mb-1 flex items-center font-medium text-green-700 dark:text-green-400">
+                      <Search className="mr-1 h-3 w-3" /> Recent voice intents
+                    </div>
+                    <ul className="space-y-1 text-gray-700 dark:text-gray-300">
+                      {voiceTranscriptHistory.map((item, index) => (
+                        <li key={`${item}-${index}`} className="line-clamp-1">
+                          • {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <VoiceControls
                   onVoiceInput={handleVoiceInput}
                   isEnabled={voiceEnabled}

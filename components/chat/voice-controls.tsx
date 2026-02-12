@@ -125,6 +125,23 @@ export default function VoiceControls({ onVoiceInput, isEnabled, latestAssistant
     handleSpeakResponse(latestAssistantMessage)
   }, [latestAssistantMessage, ttsSupported, voiceSettings.autoSpeak])
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isEnabled || event.defaultPrevented) return
+      if (event.altKey && event.key.toLowerCase() === "v") {
+        event.preventDefault()
+        if (!isListening) {
+          handleStartListening()
+        } else {
+          handleStopListening()
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [isEnabled, isListening])
+
   if (!isEnabled) return null
 
   return (
@@ -230,6 +247,8 @@ export default function VoiceControls({ onVoiceInput, isEnabled, latestAssistant
           <Settings className="h-4 w-4" />
         </Button>
       </div>
+
+      <p className="text-xs text-muted-foreground">Shortcut: <kbd className="rounded border px-1 py-0.5">Alt</kbd> + <kbd className="rounded border px-1 py-0.5">V</kbd> to toggle listening.</p>
 
       {/* Voice Settings Dialog */}
       {showSettings && (
