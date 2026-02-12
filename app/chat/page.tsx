@@ -264,6 +264,10 @@ export default function RunAshChatPage() {
   }, [])
 
   useEffect(() => {
+ 
+
+ 
+
     try {
       window.localStorage.setItem("runash_chat_preferences", JSON.stringify(userPreferences))
     } catch {
@@ -272,6 +276,11 @@ export default function RunAshChatPage() {
   }, [userPreferences])
 
   useEffect(() => {
+ 
+
+
+
+
     ;(async () => {
       try {
         const response = await fetch("/api/sessions")
@@ -308,7 +317,11 @@ export default function RunAshChatPage() {
     })()
   }, [])
 
+ 
   const loadSession = async (session: ChatSession) => {
+
+  const loadSession = (session: ChatSession) => {
+
     setCurrentSession(session)
 
     try {
@@ -343,6 +356,20 @@ export default function RunAshChatPage() {
       // keep local fallback deletion even if api call fails
     }
 
+    setChatSessions((prev) => prev.filter((session) => session.id !== sessionId))
+    if (currentSession?.id === sessionId) {
+      setCurrentSession(null)
+      setMessages([defaultAssistantMessage])
+    }
+  }
+
+  const handleNewChatSession = () => {
+    setCurrentSession(null)
+    setMessages([defaultAssistantMessage])
+    setInputValue("")
+  }
+
+  const handleDeleteSession = (sessionId: string) => {
     setChatSessions((prev) => prev.filter((session) => session.id !== sessionId))
     if (currentSession?.id === sessionId) {
       setCurrentSession(null)
@@ -455,6 +482,7 @@ export default function RunAshChatPage() {
     let activeSessionId = currentSession?.id ?? querySessionId ?? undefined
 
     try {
+ 
       if (!activeSessionId) {
         const createSessionResponse = await fetch("/api/sessions", {
           method: "POST",
@@ -496,6 +524,7 @@ export default function RunAshChatPage() {
           }),
         })
       }
+
 
       const requestedTools = /search|find|best|compare|web/i.test(content)
         ? ["catalog_lookup", "web_search"]
