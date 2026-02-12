@@ -7,7 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+ 
 import { Search, Filter, Leaf, Truck, Clock, MapPin, PlayCircle, Video, History, Globe } from "lucide-react"
+
+import { Search, Filter, Leaf, Truck, Clock, MapPin, PlayCircle, Video, History } from "lucide-react"
+
 import { CurrencyProvider, useCurrency } from "@/contexts/currency-context"
 import CurrencySelector from "@/components/grocery/currency-selector"
 import ProductGrid from "@/components/grocery/product-grid"
@@ -20,7 +24,10 @@ import FloatingLiveShoppingButton from "@/components/grocery/floating-live-shopp
 import { getActiveLiveStreams } from "@/lib/live-streaming"
 import { getFeaturedVods } from "@/lib/video-on-demand"
 import { getRecentRecordings } from "@/lib/previous-live-recording"
+ 
 import { PWASupport } from "@/components/pwa/pwa-support"
+
+
 
 type SortBy = "name" | "price" | "rating"
 type SortOrder = "asc" | "desc"
@@ -547,6 +554,64 @@ function GroceryStoreContent() {
                   </div>
                 </div>
               </TabsContent>
+
+
+              <TabsContent value="live">
+                <div className="space-y-4">
+                  <h2 className="text-lg font-semibold">Live Shopping & Recordings</h2>
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                    <Card>
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <PlayCircle className="h-4 w-4 text-emerald-600" /> Live now
+                        </div>
+                        {activeStreams.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No active stream right now.</p>
+                        ) : (
+                          activeStreams.map((stream) => (
+                            <div key={stream.id} className="rounded-md border p-3">
+                              <div className="font-medium text-sm">{stream.title}</div>
+                              <p className="text-xs text-muted-foreground">{stream.hostName} • {stream.viewerCount.toLocaleString()} viewers</p>
+                            </div>
+                          ))
+                        )}
+                        <Button variant="outline" onClick={() => router.push("/grocery/live")}>Watch live</Button>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Video className="h-4 w-4 text-purple-600" /> Video on demand
+                        </div>
+                        {featuredVods.map((vod) => (
+                          <div key={vod.id} className="rounded-md border p-3">
+                            <div className="font-medium text-sm">{vod.title}</div>
+                            <p className="text-xs text-muted-foreground">{Math.ceil(vod.durationSeconds / 60)} min • {vod.views.toLocaleString()} views</p>
+                          </div>
+                        ))}
+                        <Button variant="outline" onClick={() => router.push("/grocery/live/recordings")}>Open VOD library</Button>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <History className="h-4 w-4 text-orange-600" /> Previous live recordings
+                        </div>
+                        {recentRecordings.map((recording) => (
+                          <div key={recording.id} className="rounded-md border p-3">
+                            <div className="font-medium text-sm">{recording.title}</div>
+                            <p className="text-xs text-muted-foreground">{recording.totalPurchases} purchases • {recording.clipCount} clips</p>
+                          </div>
+                        ))}
+                        <Button variant="outline" onClick={() => router.push("/recordings")}>Manage recordings</Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </TabsContent>
+
 
             </Tabs>
           </div>
