@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
  
 import { Search, Filter, Leaf, Truck, Clock, MapPin, PlayCircle, Video, History, Globe } from "lucide-react"
 
-import { Search, Filter, Leaf, Truck, Clock, MapPin, PlayCircle, Video, History } from "lucide-react"
 
 import { CurrencyProvider, useCurrency } from "@/contexts/currency-context"
 import CurrencySelector from "@/components/grocery/currency-selector"
@@ -243,9 +242,9 @@ function GroceryStoreContent() {
                 </div>
                 <div>
                   <h1 className="text-xl font-bold bg-gradient-to-r from-green-600 to-emerald-500 text-transparent bg-clip-text">
-                    RunAsh Store
+                    RunAsh
                   </h1>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Fresh • Organic </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400"Store</p>
                 </div>
               </div>
             </div>
@@ -367,7 +366,7 @@ function GroceryStoreContent() {
                 <TabsTrigger value="featured">Featured</TabsTrigger>
                 <TabsTrigger value="products">All Products</TabsTrigger>
                 <TabsTrigger value="deals">Deals</TabsTrigger>
-                <TabsTrigger value="live">Live & Recordings</TabsTrigger>
+                <TabsTrigger value="live">Live</TabsTrigger>
               </TabsList>
 
               <TabsContent value="featured">
