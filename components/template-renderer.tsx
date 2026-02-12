@@ -1,8 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { renderTemplate } from "@/lib/templates/template-engine"
-import { revenue } from "@/lib/data" // Declare the revenue variable
+import { renderTemplate } from "@/lib/template-engine"
 
 type TemplateRendererProps = {
   templateId: "product-card" | "stream-summary"

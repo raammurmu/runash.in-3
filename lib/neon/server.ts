@@ -1,5 +1,5 @@
 import "server-only"
-import { createServerClient } from "@neon/ssr"
+import { createServerClient } from "@/lib/neon/ssr"
 import { cookies } from "next/headers"
 import type { Database } from "./types"
 

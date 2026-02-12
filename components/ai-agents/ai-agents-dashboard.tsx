@@ -2,9 +2,9 @@
 
 import { useState } from "react"
 import { useAIAgents } from "@/lib/hooks/use-ai-agents"
-import { AgentsList } from "@/components/ai-agents/agents-list"
+import { AgentsList } from "@/components/ai-agents/agents-lists"
 import { CreateAgentDialog } from "@/components/ai-agents/create-agent-dialog"
-import { AgentDetailDialog } from "@/components/ai-agents/agent-detail-dialog"
+import { AgentDetailDialog } from "@/components/ai-agents/agent--detail-dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PlusCircle } from "lucide-react"

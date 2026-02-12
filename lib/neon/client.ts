@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@neon/ssr"
+import { createBrowserClient } from "@/lib/neon/ssr"
 import type { Database } from "./types"
 
 /**
