@@ -21,7 +21,7 @@ const requestSchema = z.object({
   sessionId: z.string().trim().min(1).optional(),
   title: z.string().trim().min(1).max(120).optional(),
   message: z.string().trim().min(1).max(5000),
-  tools: z.array(z.enum(["catalog_lookup", "inventory_health", "checkout_preview"])) .default([]),
+  tools: z.array(z.enum(["catalog_lookup", "inventory_health", "checkout_preview", "web_search"])).default([]),
 })
 
 const AGENT_CHAT_ENABLED = process.env.RUNASH_AGENT_CHAT_ENABLED !== "false"

@@ -6,6 +6,7 @@ import ProductCard from "./product-card"
 import RecipeCard from "./recipe-card"
 import SustainabilityTip from "./sustainability-tip"
 import AutomationSuggestion from "./automation-suggestion"
+import SearchResults from "./search-results"
 
 interface ChatMessageProps {
   message: ChatMessage
@@ -96,6 +97,10 @@ export default function ChatMessageComponent({ message }: ChatMessageProps) {
                     <AutomationSuggestion key={suggestion.id} suggestion={suggestion} />
                   ))}
                 </div>
+              )}
+
+              {message.metadata.searchResults && message.metadata.searchResults.length > 0 && (
+                <SearchResults results={message.metadata.searchResults} />
               )}
             </div>
           )}

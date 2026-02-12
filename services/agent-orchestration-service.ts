@@ -6,8 +6,9 @@ import {
   createToolResult,
   pruneExpiredAgentRecords,
 } from "@/lib/repositories/agent-orchestration"
+import { searchProductsWithProviders } from "@/services/web-search-service"
 
-export type SupportedTool = "catalog_lookup" | "inventory_health" | "checkout_preview"
+export type SupportedTool = "catalog_lookup" | "inventory_health" | "checkout_preview" | "web_search"
 
 export type ToolExecutionContext = {
   sessionId: string
@@ -82,6 +83,18 @@ async function executeCheckoutPreview(payload: Record<string, unknown>) {
   }
 }
 
+
+async function executeWebSearch(payload: Record<string, unknown>) {
+  const query = String(payload.query ?? "").trim()
+  const results = await searchProductsWithProviders(query)
+  return {
+    query,
+    results,
+    provider: results[0]?.source ?? "fallback",
+    generatedAt: new Date().toISOString(),
+  }
+}
+
 function isHighRiskAction(actionType: string, actionPayload: Record<string, unknown>) {
   const combined = `${actionType}:${JSON.stringify(actionPayload)}`.toLowerCase()
   return /(payment|refund|charge|subscription|account|delete|payout|transfer)/.test(combined)
@@ -140,6 +153,7 @@ export async function executeToolWithPolicy(
     catalog_lookup: () => executeCatalogLookup(payload),
     inventory_health: () => executeInventoryHealth(payload),
     checkout_preview: () => executeCheckoutPreview(payload),
+    web_search: () => executeWebSearch(payload),
   }
 
   let lastError: unknown

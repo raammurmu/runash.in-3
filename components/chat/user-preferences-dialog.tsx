@@ -64,6 +64,17 @@ export default function UserPreferencesDialog({ preferences, onSave, onClose }: 
     }))
   }
 
+  const handleReset = () => {
+    setLocalPreferences({
+      dietaryRestrictions: [],
+      sustainabilityPriority: "medium",
+      budgetRange: [0, 100],
+      preferredCategories: [],
+      cookingSkillLevel: "intermediate",
+      businessType: undefined,
+    })
+  }
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -189,11 +200,14 @@ export default function UserPreferencesDialog({ preferences, onSave, onClose }: 
           <div>
             <Label className="text-base font-medium">Business Type (Optional)</Label>
             <Select
-              value={localPreferences.businessType || ""}
+              value={localPreferences.businessType || "no-business"}
               onValueChange={(value) =>
                 setLocalPreferences((prev) => ({
                   ...prev,
-                  businessType: value as "retail" | "restaurant" | "farm" | "distributor" | undefined,
+                  businessType:
+                    value === "no-business"
+                      ? undefined
+                      : (value as "retail" | "restaurant" | "farm" | "distributor"),
                 }))
               }
             >
@@ -213,6 +227,9 @@ export default function UserPreferencesDialog({ preferences, onSave, onClose }: 
         </div>
 
         <DialogFooter>
+          <Button variant="outline" onClick={handleReset}>
+            Reset
+          </Button>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
