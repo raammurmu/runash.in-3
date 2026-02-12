@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { readData } from "../utils"
+import { getCanonicalStreamUrl, readData } from "../utils"
 import type { DashboardRecentStreamsResponse } from "@/lib/types/dashboard-streams"
 
 export async function GET(request: NextRequest) {
@@ -8,7 +8,11 @@ export async function GET(request: NextRequest) {
 
   const data = await readData()
   const payload: DashboardRecentStreamsResponse = {
-    streams: data.recent.slice(0, Number.isNaN(limit) ? 6 : limit),
+    streams: data.recent.slice(0, Number.isNaN(limit) ? 6 : limit).map((stream) => ({
+      ...stream,
+      url: stream.url || getCanonicalStreamUrl(stream.id),
+      status: stream.status ?? "ended",
+    })),
   }
 
   return NextResponse.json(payload)

@@ -16,7 +16,24 @@ export interface DashboardScheduledStream {
   title: string
   category?: string
   startsAt: string
+  url?: string
   status: Extract<DashboardStreamStatus, "scheduled" | "cancelled">
+}
+
+export interface DashboardStreamDetails {
+  id: string
+  title: string
+  category?: string
+  status: DashboardStreamStatus
+  url: string
+  startsAt?: string
+  startedAt?: string
+  viewers?: number
+  duration?: string | null
+}
+
+export interface DashboardStreamDetailsResponse {
+  stream: DashboardStreamDetails
 }
 
 export interface StartStreamRequest {

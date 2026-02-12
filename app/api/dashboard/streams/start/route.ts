@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { v4 as uuidv4 } from "uuid"
-import { readData, writeData } from "../utils"
+import { getCanonicalStreamUrl, readData, writeData } from "../utils"
 import type { DashboardRecentStream, StartStreamRequest, StartStreamResponse } from "@/lib/types/dashboard-streams"
 
 export async function POST(request: Request) {
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const data = await readData()
   const id = uuidv4()
   const startedAt = new Date().toISOString()
-  const url = `${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/stream/${id}`
+  const url = getCanonicalStreamUrl(id)
 
   const newStream: DashboardRecentStream = {
     id,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { v4 as uuidv4 } from "uuid"
-import { readData, writeData } from "../utils"
+import { getCanonicalStreamUrl, readData, writeData } from "../utils"
 import type { DashboardScheduledStream, ScheduleStreamRequest, ScheduleStreamResponse } from "@/lib/types/dashboard-streams"
 
 export async function POST(request: Request) {
@@ -16,11 +16,13 @@ export async function POST(request: Request) {
   }
 
   const data = await readData()
+  const id = uuidv4()
   const scheduled: DashboardScheduledStream = {
-    id: uuidv4(),
+    id,
     title: body.title.trim(),
     category: body.category,
     startsAt: startsAtDate.toISOString(),
+    url: getCanonicalStreamUrl(id),
     status: "scheduled",
   }
 

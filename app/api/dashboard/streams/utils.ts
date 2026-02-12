@@ -25,3 +25,8 @@ export async function writeData(data: DashboardStreamsStore) {
   await fs.mkdir(path.join(process.cwd(), "data"), { recursive: true })
   await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), "utf-8")
 }
+
+export function getCanonicalStreamUrl(id: string) {
+  const base = (process.env.NEXT_PUBLIC_BASE_URL ?? "").replace(/\/$/, "")
+  return `${base}/stream/${id}`
+}

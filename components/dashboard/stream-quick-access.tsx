@@ -29,6 +29,19 @@ import type {
   StartStreamResponse,
 } from "@/lib/types/dashboard-streams"
 
+const getCanonicalStreamUrl = (id: string, url?: string) => url || `/stream/${id}`
+
+const getAppHrefFromStreamUrl = (id: string, url?: string) => {
+  const canonicalUrl = getCanonicalStreamUrl(id, url)
+
+  try {
+    const parsed = new URL(canonicalUrl)
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`
+  } catch {
+    return canonicalUrl
+  }
+}
+
 export function StreamQuickAccess() {
   const router = useRouter()
   const [streamTitle, setStreamTitle] = useState("")
@@ -119,7 +132,7 @@ export function StreamQuickAccess() {
       ])
       setStreamTitle("")
       // Navigate to stream detail/player page (adjust route to your app)
-      router.push(`/stream/${data.id}`)
+      router.push(getAppHrefFromStreamUrl(data.id, data.url))
     } catch (err: any) {
       console.error(err)
       toast({ title: "Error", description: err?.message || "Could not start stream." })
@@ -416,8 +429,7 @@ export function StreamQuickAccess() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                      // Quick "copy link" for a scheduled stream
-                      const link = `${window.location.origin}/stream/${stream.id}`
+                      const link = getCanonicalStreamUrl(stream.id, stream.url)
                       navigator.clipboard.writeText(link)
                       toast({ title: "Link Copied", description: link })
                     }}>
