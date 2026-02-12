@@ -8,6 +8,7 @@ import {
   type GroceryProductRecord,
 } from "@/lib/repositories/grocery"
 import { mapGroceryProductToChatProduct } from "@/lib/chat-product-recommendations"
+import { groceryProducts } from "@/lib/grocery-products"
 
 const sortFieldMap = {
   name: "name",
@@ -73,6 +74,105 @@ function hasProductWriteAccess(role: string) {
   return role === "admin" || role === "seller"
 }
 
+function getCatalogFallbackProducts(params: {
+  category: string | null
+  search: string | null
+  isOrganic: boolean
+  isFreshProduce: boolean
+  minPrice?: number
+  maxPrice?: number
+  sortBy: "name" | "price" | "average_rating"
+  sortOrder: "asc" | "desc"
+  limit: number
+  offset: number
+}) {
+  let filtered = [...groceryProducts]
+
+  if (params.category && params.category !== "all") {
+    filtered = filtered.filter((product) => product.category.toLowerCase() === params.category.toLowerCase())
+  }
+
+  if (params.search) {
+    const term = params.search.toLowerCase()
+    filtered = filtered.filter((product) => {
+      const tags = Array.isArray(product.tags) ? product.tags : []
+      return (
+        product.name.toLowerCase().includes(term) ||
+        product.description.toLowerCase().includes(term) ||
+        tags.some((tag) => tag.toLowerCase().includes(term))
+      )
+    })
+  }
+
+  if (params.isOrganic) {
+    filtered = filtered.filter((product) => product.organic)
+  }
+
+  if (params.isFreshProduce) {
+    filtered = filtered.filter((product) => product.locallySourced)
+  }
+
+  if (typeof params.minPrice === "number") {
+    const minimum = params.minPrice
+    filtered = filtered.filter((product) => product.price >= minimum)
+  }
+
+  if (typeof params.maxPrice === "number") {
+    const maximum = params.maxPrice
+    filtered = filtered.filter((product) => product.price <= maximum)
+  }
+
+  filtered.sort((a, b) => {
+    let aValue: string | number
+    let bValue: string | number
+
+    if (params.sortBy === "price") {
+      aValue = a.price
+      bValue = b.price
+    } else if (params.sortBy === "average_rating") {
+      aValue = a.rating
+      bValue = b.rating
+    } else {
+      aValue = a.name.toLowerCase()
+      bValue = b.name.toLowerCase()
+    }
+
+    if (params.sortOrder === "desc") {
+      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
+    }
+
+    return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
+  })
+
+  const paginated = filtered.slice(params.offset, params.offset + params.limit)
+
+  return {
+    products: paginated.map((product) => ({
+      id: product.id,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      priceINR: undefined,
+      category: product.category,
+      subcategory: product.subcategory,
+      brand: "",
+      images: [product.image],
+      inStock: product.inStock,
+      stockQuantity: product.inStock ? 100 : 0,
+      unit: product.unit,
+      minOrderQuantity: 1,
+      maxOrderQuantity: 10,
+      isOrganic: product.organic,
+      isFreshProduce: product.locallySourced,
+      averageRating: product.rating,
+      totalReviews: product.reviewCount,
+      tags: product.tags,
+    })),
+    totalProducts: filtered.length,
+    categories: [...new Set(groceryProducts.map((product) => product.category))],
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -95,21 +195,44 @@ export async function GET(request: NextRequest) {
     const safePage = Number.isFinite(page) && page > 0 ? page : 1
     const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 20
 
-    const { products, totalProducts } = await listGroceryProducts({
-      category,
-      search,
-      isOrganic: normalizedOrganic === "true",
-      isFreshProduce: normalizedFreshProduce === "true",
-      minPrice: minPrice ? Number.parseFloat(minPrice) : undefined,
-      maxPrice: maxPrice ? Number.parseFloat(maxPrice) : undefined,
-      sortBy: normalizedSortBy,
-      sortOrder: normalizedSortOrder,
-      limit: safeLimit,
-      offset: (safePage - 1) * safeLimit,
-    })
+    let normalizedProducts: ReturnType<typeof asClientProduct>[] = []
+    let totalProducts = 0
+    let categories: string[] = []
 
-    const categories = (await listGroceryCategories()).map((row) => row.category)
-    const normalizedProducts = products.map(asClientProduct)
+    try {
+      const result = await listGroceryProducts({
+        category,
+        search,
+        isOrganic: normalizedOrganic === "true",
+        isFreshProduce: normalizedFreshProduce === "true",
+        minPrice: minPrice ? Number.parseFloat(minPrice) : undefined,
+        maxPrice: maxPrice ? Number.parseFloat(maxPrice) : undefined,
+        sortBy: normalizedSortBy,
+        sortOrder: normalizedSortOrder,
+        limit: safeLimit,
+        offset: (safePage - 1) * safeLimit,
+      })
+
+      totalProducts = result.totalProducts
+      normalizedProducts = result.products.map(asClientProduct)
+      categories = (await listGroceryCategories()).map((row) => row.category)
+    } catch {
+      const fallback = getCatalogFallbackProducts({
+        category,
+        search,
+        isOrganic: normalizedOrganic === "true",
+        isFreshProduce: normalizedFreshProduce === "true",
+        minPrice: minPrice ? Number.parseFloat(minPrice) : undefined,
+        maxPrice: maxPrice ? Number.parseFloat(maxPrice) : undefined,
+        sortBy: normalizedSortBy,
+        sortOrder: normalizedSortOrder,
+        limit: safeLimit,
+        offset: (safePage - 1) * safeLimit,
+      })
+      normalizedProducts = fallback.products
+      totalProducts = fallback.totalProducts
+      categories = fallback.categories
+    }
 
     const responseProducts =
       format === "chat" ? normalizedProducts.map((product) => mapGroceryProductToChatProduct(product)) : normalizedProducts
